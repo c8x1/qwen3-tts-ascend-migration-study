@@ -162,6 +162,8 @@
 
 ## 8. 单页内容模板
 
+页面的视觉系统、响应式三栏布局与侧栏交互由 [`2026-07-16-knowledge-site-template-design.md`](2026-07-16-knowledge-site-template-design.md) 进一步约束。
+
 每个主题页根据适用性包含：
 
 1. 学习目标与前置知识；
