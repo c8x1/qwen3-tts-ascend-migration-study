@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Phase 1 reference-project selection
-- Active task: Task 4 Ascend candidate breadth research complete
-- Last verified baseline: Phase 1 Task 4 final gate — research data valid; 15/15 Python validator unit tests passed; all 8 required landscape headings were found; 47 sources, 38 exact queries and 15 deduplicated candidates passed numeric-ID, duplicate, score-total, evidence-reference and canonical-URL audits; 4 shortlisted projects have full 40-character revisions; 7 rejected projects have explicit reasons; two saturation passes each contain 4 zero-new-candidate queries; `git diff --check`, no-site and no-weight/data audits were clean on 2026-07-17. Playwright was not run because Task 4 prohibits site work.
+- Active task: Task 4 review remediation verification
+- Last verified baseline: commit `0ab6390` passed the original Task 4 gate, but its saturation claim was superseded during review remediation. The complete 54-cell matrix, six omitted discovery-provenance replays, 18-candidate canonical/mirror and maintenance screening, and two fresh consecutive 9-family native-API passes are now recorded. QRY-104–112 and QRY-113–121 are all successful with `incomplete_results=false` and add zero eligible canonical repositories; fresh final validator/test/audit evidence is pending. Playwright remains prohibited for this research-only task.
 
 ## Completed checkpoints
 
@@ -16,10 +16,13 @@
 - Task 2 review validator remediation enforces audited/recommended evidence, rejected evidence or reason, search-row integrity, candidate references, and exception-free malformed-row reporting
 - Task 3 official evidence integrated and verified at fixed Qwen3-TTS source revision `022e286b98fbec7e1e916cb940cdf532cd9f488e`, arXiv `2601.15621v1`, and full official Hugging Face/ModelScope asset revisions
 - Task 3 review remediation verified per-asset immutable Hugging Face sources, per-asset official ModelScope remotes, and six preserved-history official-first/GitHub search records
-- Task 4 breadth discovery covers all nine required English/Chinese query families and every required channel, preserves two exact GitHub API zero-result searches and one failed authenticated-code-search attempt, and records two consecutive saturation passes with zero new eligible canonical repository
-- Task 4 candidate pool deduplicates GitCode/GitHub/Gitee mirrors into 15 canonical records and retains inference-only or research-axis-mismatched projects as explicit rejections
+- Task 4 original breadth discovery covered all nine required families but its coarse channel and saturation claims are superseded by the review-remediation records below
+- Task 4 remediation preserves the 54-cell matrix and six omitted candidate-producing searches; native GitHub replay added fixed CAND-016 Inworld TTS and CAND-017 Alibaba unified-audio records, while a community GLM-TTS 910B inference-only adaptation failed the training-candidate inclusion gate
+- Task 4 remediation saturation attempt QRY-095–103 found and fixed CAND-018 official GLM-TTS, separating its CUDA-hardcoded GRPO training entry from official/derivative NPU inference evidence; this reset the counter before final passes
+- Task 4 remediation final saturation passes QRY-104–112 and QRY-113–121 each cover all nine query families via successful GitHub native repository API calls and add zero eligible canonical repositories; failed/auth-gated queries are excluded
+- Task 4 candidate pool deduplicates GitCode/GitHub/Gitee mirrors into 18 canonical records and retains inference-only or research-axis-mismatched projects as explicit rejections
 - Task 4 shortlist is bounded to MindSpeed-MM as exact Qwen3-TTS SFT main-reference candidate, MindSpeed-LLM as text-Qwen3 scale satellite, and MOSS-TTS/CosyVoice as speech satellites whose Ascend ports remain attributed only to MindSpeed-MM
-- Task 4 final verification passed the standard validator, all 15 research-validator tests, required-heading scan, 47/38/15 count audit, duplicate/score/evidence/fixed-revision/saturation audits, no-site/no-weight checks and whitespace validation
+- Task 4 remediation verification passed the standard validator, all 15 research-validator tests, required-heading scan, 64-source/121-query/18-candidate count audit, 54-cell matrix, six discovery-provenance, duplicate/score/evidence, 18-candidate maintenance/canonical, CAND-005 mirror and two-new-pass audits, plus no-site/no-weight/pycache and whitespace checks
 - Template visual and interaction specification approved
 - Task 1 complete: fixed-dependency Playwright harness established and verified
 - Task 2 complete: semantic three-column page and local visual system implemented and verified
@@ -81,6 +84,7 @@
 | DEV-017 | 2026-07-17 | Phase 1 Task 4 candidate licensing | MindSpeed-MM and MindSpeed-LLM root license files combine BSD-3-Clause-style terms with upstream notices while platform SPDX metadata is not authoritative | Record both as aggregate `Other`, lower docs/license scores, and prohibit clone/vendor in this phase | A shorthand SPDX guess could hide file-level obligations and change the delivery method | Metadata-only research can continue; any source vendoring becomes DEC-001 and requires explicit approval | Task 5 completes a file-level license audit or the owner publishes authoritative SPDX metadata |
 | DEV-018 | 2026-07-17 | Phase 1 Task 4 fixed revisions | Several rejected moving-only ecosystem entries expose enough official evidence for exclusion but not a stable public commit permalink verified in this task | Leave revision empty and document the moving-source limitation instead of inventing a SHA; require complete SHAs for all four shortlisted projects | Fixed-revision policy must not turn unavailable provenance into fabricated precision | Shortlist evidence is immutable while rejected entries remain reproducible only at their official canonical entry | A stable official commit becomes available or a rejected project returns to active audit scope |
 | DEV-019 | 2026-07-17 | Phase 1 Task 4 compatibility and scale | Public matrices establish CANN 8.5.0 or 9.x routes and launchers expose multi-node configuration, but neither proves target CANN 8.5.2 nor exact Qwen3-TTS multi-node execution | Preserve CANN 8.5.2 compatibility and all candidate-specific multi-node runs as unknown/pending hardware validation | Patch-number inference and launcher presence are weaker than a compatibility row or run artifact | Scores reflect source/config maturity without claiming hardware success | Official 8.5.2 matrix or scoped Ascend 910B execution evidence is produced |
+| DEV-020 | 2026-07-17 | Phase 1 Task 4 review remediation | Post-matrix saturation attempts found three additional mature speech/codec projects, invalidating the original zero-new conclusion | Add fixed CAND-016–018 records, preserve GLM-TTS canonical/derivative boundaries, reset the counter after each discovery, and only stop after QRY-104–121 provide two fresh successful 9-family passes | Methodology requires any new inclusion-rule candidate to reset saturation rather than forcing the old 15-candidate conclusion | Candidate count grows to 18 without changing the four-project shortlist; the new projects remain comparison-only because none establishes Ascend training | A new query-family pass finds another eligible canonical project or Task 5 evidence changes shortlist roles |
 
 ## Evidence gaps
 
@@ -95,6 +99,7 @@
 - CANN 8.5.2 compatibility is not established by the inspected CAND-001 8.5.0 defaults or CAND-002 9.x release route; patch-level compatibility remains unknown.
 - MindSpeed-MM exposes exact Qwen3-TTS multi-node launch parameters but no candidate-specific multi-node run artifact was verified; MindSpeed-LLM scale evidence is not speech training evidence.
 - CAND-001/CAND-002 vendoring remains prohibited pending DEC-001; CAND-006 and CAND-011–014 retain moving-only official exclusion sources rather than fabricated fixed revisions.
+- CAND-016 Inworld TTS and CAND-017 Alibaba unified-audio add CUDA/non-Ascend speech and codec training comparison only; CAND-018 GLM-TTS exposes official/derivative Ascend inference setup but its fixed GRPO training entry hardcodes CUDA.
 - GitHub code search QRY-038 returned HTTP 401 and was excluded from saturation proof; private, deleted, unindexed or access-controlled repositories remain outside observable coverage.
 
 ## Next actions
