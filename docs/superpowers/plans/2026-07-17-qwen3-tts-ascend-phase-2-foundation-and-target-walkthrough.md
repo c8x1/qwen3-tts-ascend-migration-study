@@ -273,11 +273,13 @@ import hashlib
 import collections
 import csv
 import re
+import os
+import subprocess
 import tempfile
 import urllib.parse
 from dataclasses import dataclass
 from functools import lru_cache
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1916,7 +1918,7 @@ Create `scripts/site_builder.py` with HTML escaping on every catalog/index value
 
 `render_page(page, navigation, evidence, search_documents) -> str` follows this complete deterministic algorithm: (1) reject any block evidence ID absent from `evidence`; (2) compute CSS/JS/search/nav links with `relative_href`; (3) render the shared header/search form, `chapter-nav`, `chapter-tree`, `article-content`, one escaped `h1`, objectives/prerequisites, and `page-toc`; (4) dispatch only the five tagged block types, escape every scalar with `html.escape(..., quote=True)`, verify table row widths, and give index rows the same `_anchor` used by search; (5) collect referenced evidence in first-use order and render `evidence-rail` cards with state text, fixed source/ledger links, and each allowlisted internal decision path through `decision_href(page["slug"], ref)`—therefore `site/index.html` uses `../research/...` and `site/target/*.html` uses `../../research/...`; (6) render `toggle-left`/`toggle-right` controls and previous/next navigation; (7) on `search.html`, embed `script_safe_json(search_documents)` in `#search-data` and render the alphabetical no-script page directory; (8) join fixed partials with `\n` and end with exactly one newline. Stable failures are `page <slug>#<section>: unknown evidence <id>`, `block <type>: unsupported`, and `table <section>: row width <n> expected <m>`.
 
-Dependency direction is one-way at module initialization: `site_builder.py` imports data contracts/loaders from `phase2_contracts.py`; `phase2_contracts.py` never imports `site_builder.py` at module import time. Task 8 uses function-local imports for both `load_all_indexes` in `validate_cross_contracts` and `build_site` in the fresh-build validator only after both modules are initialized, preventing a circular import.
+Dependency direction is one-way at module initialization: `site_builder.py` imports data contracts/loaders from `phase2_contracts.py`; `phase2_contracts.py` never imports `site_builder.py` at module import time. Task 8 uses function-local imports for `load_all_indexes` in `validate_cross_contracts`/`validate_fixed_links` and `build_site` in the fresh-build validator only after both modules are initialized, preventing a circular import.
 
 ```python
 def script_safe_json(data: object) -> str:
@@ -2172,8 +2174,10 @@ Expected: one commit with the complete 13-page generated site; no candidate sour
 
 **Files:**
 - Modify: `scripts/phase2_contracts.py`
+- Modify: `scripts/site_builder.py`
 - Modify: `scripts/validate_phase2.py`
 - Modify: `tests/test_phase2_contracts.py`
+- Modify: `tests/test_site_builder.py`
 - Modify: `tests/site/template-structure.spec.js`
 - Modify: `tests/site/final-review-regressions.spec.js`
 - Modify: `tests/site/template-visual.spec.js`
@@ -2186,7 +2190,7 @@ Expected: one commit with the complete 13-page generated site; no candidate sour
 
 **Interfaces:**
 - Consumes: complete 13-page site, content catalogs, 4 indexes, loaded evidence records, 35 coverage rows and existing Playwright shell behavior.
-- Produces: `validate_generated_site(site_root: Path, pages: list[dict], evidence: dict[str, Evidence], coverage: list[dict]) -> list[str]`, `validate_cross_contracts(pages, evidence, coverage) -> list[str]`, `expected_generated_outputs(pages) -> set[str]`, `validate_fixed_links(site_root, registry) -> list[str]`, `validate_public_tracking(root) -> list[str]`; final `validate_phase2.py` gate and Playwright regressions.
+- Produces: `validate_generated_site(site_root: Path, pages: list[dict], evidence: dict[str, Evidence], coverage: list[dict]) -> list[str]`, `validate_cross_contracts(pages, evidence, coverage) -> list[str]`, `expected_generated_outputs(pages) -> set[str]`, `validate_fixed_links(site_root, registry) -> list[str]`, `validate_public_tracking(root, tracked_paths=None) -> list[str]`; final `validate_phase2.py` gate and Playwright regressions.
 
 - [ ] **Step 1: 写入 Python failing site validation tests**
 
@@ -2199,7 +2203,9 @@ import shutil
 import tempfile
 
 from scripts.phase2_contracts import (DECISION_REFS, load_evidence,
-                                      validate_cross_contracts, validate_generated_site)
+                                      load_snapshot_registry, validate_cross_contracts,
+                                      validate_fixed_links, validate_generated_site,
+                                      validate_public_tracking)
 from scripts.site_builder import build_site, load_page_catalogs
 
 
@@ -2268,6 +2274,36 @@ class GeneratedSiteContractTest(unittest.TestCase):
         index.write_text(html.replace("</main>", '<a href="../IMPLEMENTATION_NOTES.md">escape</a></main>'), encoding="utf-8")
         self.assertIn("index.html: local link escapes site ../IMPLEMENTATION_NOTES.md",
                       validate_generated_site(root, pages, evidence, coverage))
+
+    def test_fixed_link_rejects_moving_qwen_revision(self):
+        context, root, _, _, _ = generated_copy()
+        self.addCleanup(context.cleanup)
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        revision = registry["qwen3-tts-022e286b"].revision
+        page_path = root / "indexes/source-files.html"
+        html = page_path.read_text(encoding="utf-8")
+        self.assertIn(f"/blob/{revision}/", html)
+        page_path.write_text(html.replace(f"/blob/{revision}/", "/blob/main/", 1), encoding="utf-8")
+        self.assertIn("indexes/source-files.html: fixed link qwen3-tts-022e286b: moving revision main",
+                      validate_fixed_links(root, registry))
+
+    def test_public_tracking_rejects_restricted_path_and_lfs_pointer_but_allows_normal_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "research").mkdir()
+            (root / "README.md").write_text("normal documentation\n", encoding="utf-8")
+            (root / "research/source-ledger.csv").write_text("id,url\n", encoding="utf-8")
+            self.assertEqual(validate_public_tracking(
+                root, ["README.md", "research/source-ledger.csv"]), [])
+            self.assertIn("public tracking: restricted path models/weights.bin",
+                          validate_public_tracking(root, ["models/weights.bin"]))
+            self.assertIn("public tracking: restricted path references/private.md",
+                          validate_public_tracking(root, ["references/private.md"]))
+            (root / "pointer.txt").write_text(
+                "version https://git-lfs.github.com/spec/v1\n"
+                "oid sha256:0123456789abcdef\nsize 12\n", encoding="utf-8")
+            self.assertIn("public tracking: Git LFS pointer pointer.txt",
+                          validate_public_tracking(root, ["pointer.txt"]))
 
     def test_coverage_catalog_evidence_and_important_bridge_mutations(self):
         _, pages, evidence, coverage = full_inputs()
@@ -2442,9 +2478,133 @@ def validate_generated_site(site_root, pages, evidence, coverage,
     return errors
 ```
 
+In Task 8, update both index-row and evidence-card rendering so **every** generated fixed source anchor has `data-fixed-source-link`, `data-snapshot-id`, and `data-source-path`. Text links additionally have integer `data-start-line` and `data-end-line`; binary links instead have `data-file-only="true"` and no start/end attributes. The `href` remains escaped output of the registry template: text uses the exact `#L{start}-L{end}` anchor, while binary removes the template's line fragment entirely. `tests/test_site_builder.py` asserts these attributes on one text index row, one source-backed evidence card and one binary row.
+
+Implement the two publication gates as executable contracts. The HTML collector exposes every anchor's attributes; `validate_fixed_links` parses exactly all 13 generated HTML pages, rejects an unmarked URL matching any registry repository `/blob/` prefix (including moving branches or a wrong SHA), and validates each marked link against the registry plus the corresponding fixed source index:
+
+```python
+def _expected_fixed_url(snapshot, source_path, start=None, end=None, file_only=False):
+    if file_only:
+        return snapshot.blob_url_template.split("#L", 1)[0].format(path=source_path)
+    return snapshot.blob_url_template.format(path=source_path, start=start, end=end)
+
+
+def validate_fixed_links(site_root: Path, registry) -> list[str]:
+    from scripts.site_builder import load_all_indexes
+
+    errors = []
+    indexes = load_all_indexes()
+    html_paths = sorted(site_root.rglob("*.html"))
+    if len(html_paths) != 13:
+        errors.append(f"fixed links: expected 13 HTML pages, found {len(html_paths)}")
+    repository_blob_prefixes = tuple(snapshot.blob_url_template.partition("/blob/")[0] + "/blob/"
+                                     for snapshot in registry.values())
+
+    for page_path in html_paths:
+        relative = page_path.relative_to(site_root).as_posix()
+        document = parse_html(page_path)
+        for anchor in document.anchors:
+            attrs, href = anchor.attributes, anchor.attributes.get("href", "")
+            marked = "data-fixed-source-link" in attrs
+            if href.startswith(repository_blob_prefixes) and not marked:
+                errors.append(f"{relative}: unmarked fixed source link {href}")
+                continue
+            if not marked:
+                continue
+            snapshot_id = attrs.get("data-snapshot-id", "")
+            source_path = attrs.get("data-source-path", "")
+            if snapshot_id not in registry:
+                errors.append(f"{relative}: fixed link unknown snapshot {snapshot_id}")
+                continue
+            snapshot = registry[snapshot_id]
+            revision = href.partition("/blob/")[2].partition("/")[0]
+            if revision in {"main", "master"}:
+                errors.append(f"{relative}: fixed link {snapshot_id}: moving revision {revision}")
+                continue
+            if revision != snapshot.revision:
+                errors.append(f"{relative}: fixed link {snapshot_id}: revision {revision} expected {snapshot.revision}")
+                continue
+            indexed = {row["path"]: row for row in indexes[snapshot_id]["files"]}
+            if source_path not in indexed:
+                errors.append(f"{relative}: fixed link {snapshot_id}: unknown path {source_path}")
+                continue
+            row = indexed[source_path]
+            file_only = attrs.get("data-file-only") == "true"
+            if row["kind"] == "binary":
+                if not file_only or "#" in href or "data-start-line" in attrs or "data-end-line" in attrs:
+                    errors.append(f"{relative}: binary fixed link {snapshot_id}:{source_path} must be file-only")
+                    continue
+                expected = _expected_fixed_url(snapshot, source_path, file_only=True)
+            else:
+                try:
+                    start, end = int(attrs["data-start-line"]), int(attrs["data-end-line"])
+                except (KeyError, ValueError):
+                    errors.append(f"{relative}: text fixed link {snapshot_id}:{source_path} missing line range")
+                    continue
+                if file_only or not (1 <= start <= end <= row["line_count"]):
+                    errors.append(f"{relative}: text fixed link {snapshot_id}:{source_path} invalid line range {start}-{end}")
+                    continue
+                expected = _expected_fixed_url(snapshot, source_path, start, end)
+            if href != expected:
+                errors.append(f"{relative}: fixed link {snapshot_id}:{source_path} URL mismatch")
+    return errors
+
+
+RESTRICTED_DIRS = {"model", "models", "weight", "weights", "dataset", "datasets",
+                   "data", "checkpoint", "checkpoints"}
+RESTRICTED_SUFFIXES = {".pem", ".key", ".safetensors", ".ckpt", ".pt", ".pth",
+                       ".bin", ".onnx", ".h5", ".hdf5", ".npy", ".npz",
+                       ".parquet", ".arrow", ".feather", ".tfrecord", ".mdb",
+                       ".sqlite", ".db", ".jsonl", ".wav", ".mp3", ".m4a"}
+LFS_HEADER = b"version https://git-lfs.github.com/spec/v1"
+
+
+def validate_public_tracking(root: Path, tracked_paths=None) -> list[str]:
+    if tracked_paths is None:
+        raw = subprocess.run(["git", "ls-files", "-z"], cwd=root, check=True,
+                             stdout=subprocess.PIPE).stdout
+        tracked_paths = [os.fsdecode(item) for item in raw.split(b"\0") if item]
+    errors = []
+    for value in tracked_paths:
+        relative = os.fsdecode(value)
+        parts = PurePosixPath(relative).parts
+        lowered = tuple(part.casefold() for part in parts)
+        private_checkout = any(
+            lowered[index] == ".superpowers" and index + 1 < len(lowered)
+            and lowered[index + 1] == "source-checkouts"
+            for index in range(len(lowered))
+        )
+        references_dir = "references" in lowered[:-1]
+        env_file = any(part == ".env" or part.startswith(".env.") for part in lowered)
+        restricted_dir = any(part in RESTRICTED_DIRS for part in lowered[:-1])
+        restricted_suffix = PurePosixPath(relative).suffix.casefold() in RESTRICTED_SUFFIXES
+        if private_checkout or references_dir or env_file or restricted_dir or restricted_suffix:
+            errors.append(f"public tracking: restricted path {relative}")
+            continue
+        candidate = root / relative
+        if candidate.is_file():
+            with candidate.open("rb") as handle:
+                if handle.read(len(LFS_HEADER)) == LFS_HEADER:
+                    errors.append(f"public tracking: Git LFS pointer {relative}")
+    return errors
+```
+
+`.csv` and `.tsv` are deliberately absent from `RESTRICTED_SUFFIXES`: ordinary tracked research ledgers remain valid. A CSV/TSV inside any restricted data/model/weight/checkpoint directory is still rejected by the directory rule. Git LFS pointer detection runs regardless of suffix.
+
 `validate_document_structure` performs the one-h1, non-skipping heading, four-state evidence-status and runtime-resource checks. `validate_remote_resources` rejects every remote script, stylesheet, font, image and search-data URL; only anchor citations with an `https` scheme are accepted. `validate_aria_references` checks every token in every `aria-controls` value against IDs in the same document. Exact stable mutation errors are those asserted in Step 1.
 
-Extend `validate_phase2.py` success output to exactly:
+Wire both publication functions into `validate_phase2.py` default mode; `--indexes-only` retains its earlier scope. The default path loads the registry/pages/evidence/coverage once, appends both functions' errors, prints every error and exits nonzero if any exist, and prints success only after both return no errors:
+
+```python
+errors.extend(validate_generated_site(ROOT / "site", pages, evidence, coverage))
+errors.extend(validate_fixed_links(ROOT / "site", registry))
+errors.extend(validate_public_tracking(ROOT))
+if errors:
+    print("\n".join(errors), file=sys.stderr)
+    return 1
+```
+
+The resulting success output remains exactly:
 
 ```text
 validated Phase 2: 4 indexes / 3270 files, {len(evidence)} evidence records, 35 coverage rows, 13 pages, 0 broken links, 0 omissions
@@ -2582,7 +2742,7 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-Expected: validator prints the dynamic evidence count and fixed 4/3270/35/13 structural counts; all discovered Python tests pass; whitespace check has no output.
+Expected: validator invokes `validate_fixed_links` and the default NUL-safe `validate_public_tracking`, prints the dynamic evidence count and fixed 4/3270/35/13 structural counts only after both return zero errors; all discovered Python tests pass; whitespace check has no output.
 
 - [ ] **Step 7: 更新并复验三视口 screenshots**
 
@@ -2601,28 +2761,31 @@ Run: `npm test`
 
 Expected: every discovered Playwright test passes; report the runner's actual total instead of a hand-maintained expected count.
 
-- [ ] **Step 9: 运行 final public-content and actual-path audit**
+- [ ] **Step 9: 运行 defense-in-depth public-content and actual-path audit**
+
+`validate_public_tracking(ROOT)` is the primary, NUL-safe publication gate executed by `validate_phase2.py`. Retain these shell scans as defense-in-depth only; they must stay consistent with the Python path/suffix policy and must not blanket-reject ordinary research CSV/TSV files.
 
 Run:
 
 ```bash
-git ls-files | rg '(^|/)\.superpowers/source-checkouts/|\.(safetensors|ckpt|pt|pth|onnx|gguf|wav|mp3|m4a|flac)$|(^|/)(weights|datasets|checkpoints)(/|$)' && exit 1 || true
+git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|wav|mp3|m4a)$' && exit 1 || true
+git ls-files -z | xargs -0 rg -l -U '^version https://git-lfs\.github\.com/spec/v1' && exit 1 || true
 rg -ni 'to''do|tb''d|place''holder|lorem'' ipsum' content research/indexes research/target-evidence.json research/target-coverage.csv site scripts tests
 rg -n '/Users/|[A-Za-z]:\\\\' research/indexes site/assets/search-index.json
 for path in finetuning/README.md finetuning/dataset.py finetuning/sft_12hz.py qwen_tts/core/models/modeling_qwen3_tts.py qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py; do test -f ".superpowers/source-checkouts/qwen3-tts-022e286b/$path"; done
 git status --short
 ```
 
-Expected: restricted tracking, red-flag-token and absolute-path scans have no output; all six verified target paths exist; status lists only Task 8 intended files before commit.
+Expected: restricted tracking, LFS-pointer, red-flag-token and absolute-path scans have no output; all six verified target paths exist; status lists only Task 8 intended files before commit. The shell result supplements rather than replaces the passing `validate_public_tracking` gate.
 
 - [ ] **Step 10: 记录 Phase 2 completion/deviations/deferred work**
 
-Append a dated `Phase 2 target walkthrough completion` entry to `IMPLEMENTATION_NOTES.md` with: generated 13-page scope; actual derived evidence/test counts; local-HTTP/browser-offline definition; implementation deviations from this plan; identity limitation inherited from Task 3; no CUDA/NPU/model execution; CANN 8.5.2 unknown; and the unchanged deferrals (full MM/LLM/MOSS walkthroughs, migration mapping, 8-card/multi-node/NPU execution).
+Append a dated `Phase 2 target walkthrough completion` entry to `IMPLEMENTATION_NOTES.md` with: generated 13-page scope; actual derived evidence/test counts; local-HTTP/browser-offline definition; implementation deviations from this plan; identity limitation inherited from Task 3; no CUDA/NPU/model execution; CANN 8.5.2 unknown; and the unchanged deferrals (full MM/LLM/MOSS walkthroughs, migration mapping, 8-card/multi-node/NPU execution). The entry may claim publication gates complete only when the production `validate_phase2.py` invocation has run `validate_fixed_links(ROOT / "site", registry)` and `validate_public_tracking(ROOT)` and both returned zero errors, with their mutation tests passing.
 
 - [ ] **Step 11: 提交 completion gates**
 
 ```bash
-git add scripts/phase2_contracts.py scripts/validate_phase2.py tests/test_phase2_contracts.py tests/site IMPLEMENTATION_NOTES.md
+git add scripts/phase2_contracts.py scripts/site_builder.py scripts/validate_phase2.py tests/test_phase2_contracts.py tests/test_site_builder.py tests/site IMPLEMENTATION_NOTES.md
 git commit -m "test: verify Phase 2 target walkthrough"
 ```
 
@@ -2638,7 +2801,8 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 npm test
 git diff --check
 git status -sb
-git ls-files | rg '(^|/)\.superpowers/source-checkouts/|\.(safetensors|ckpt|pt|pth|onnx|gguf|wav|mp3|m4a|flac)$|(^|/)(weights|datasets|checkpoints)(/|$)' && exit 1 || true
+git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|wav|mp3|m4a)$' && exit 1 || true
+git ls-files -z | xargs -0 rg -l -U '^version https://git-lfs\.github\.com/spec/v1' && exit 1 || true
 ```
 
 Required evidence:
@@ -2646,6 +2810,7 @@ Required evidence:
 - Four deterministic indexes validate at exact revisions and total 3,270 materialized files; archive inputs were never described or handled as Git repositories.
 - The dynamically counted bounded evidence records use all four states, resolve every `source_id` against the Phase 1 ledger, and 35 target files have exactly one mapped/excluded/pending disposition.
 - The generated site has exactly 13 coverage-driven pages, one `h1` each, complete previous/next navigation, local inline search and no broken local links/fragments.
+- Production `validate_phase2.py` calls `validate_fixed_links(ROOT / "site", registry)` and `validate_public_tracking(ROOT)`; both return zero errors, including exact fixed revisions/anchors and the NUL-safe tracked-file policy.
 - Python and Playwright report their actual discovered totals with zero failures across desktop, laptop, mobile, 200% reflow, browser-offline, no-script and axe cases.
 - No tracked source tree, weight, dataset, checkpoint, LFS object, secret, restricted media, absolute local path or full source body exists.
 - The content visibly preserves PyTorch single-card teaching, both environment lanes, CANN 8.5.2 unknown status and all deferred later-plan boundaries.
