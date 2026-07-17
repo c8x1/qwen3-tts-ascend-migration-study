@@ -4,7 +4,7 @@
 
 - Phase: Knowledge-site template
 - Active task: Task 3 — independent sidebar state
-- Last verified commit: `e09a34d`
+- Last verified baseline: `549fc82`
 
 ## Completed checkpoints
 
@@ -13,6 +13,10 @@
 - Fixed-dependency Playwright harness established and verified
 - Semantic three-column page and local visual system implemented and verified
 - Task 2 review fixes verified: readable no-script tablet rail, semantic current-page state, visible active marker, and parsed-origin resource checks
+- Independent desktop and laptop sidebar states implemented and verified
+- Valid sidebar preferences persist independently; invalid values recover to viewport defaults
+- `Alt+[` and `Alt+]` shortcuts toggle the canonical accessible sidebar buttons and keep `aria-expanded` synchronized
+- Storage failures retain usable in-memory sidebar interaction for the current page view
 
 ## Major decisions requiring user confirmation
 
@@ -28,9 +32,9 @@
 
 ## Evidence gaps
 
-- Sidebar behavior, responsive interaction, accessibility audit, print behavior, and visual baselines remain to be implemented or verified in later tasks.
+- Mobile drawer behavior, responsive interaction beyond Task 3 state coverage, accessibility audit, print behavior, and visual baselines remain to be implemented or verified in later tasks.
 
 ## Next actions
 
-1. Implement independent sidebar state.
-2. Verify responsive, no-script, accessibility, print, and visual behavior.
+1. Verify mobile drawer and responsive behavior.
+2. Verify no-script, accessibility, print, and visual behavior.
