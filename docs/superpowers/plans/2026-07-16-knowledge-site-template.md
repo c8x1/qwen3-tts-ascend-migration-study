@@ -21,7 +21,7 @@
 - 页面不得加载远程字体、CSS、JavaScript 或图片。
 - 状态不能只依赖颜色；交互必须满足键盘、焦点和 `aria-expanded` 要求。
 - 持续维护 `IMPLEMENTATION_NOTES.md`；小的不确定性采用保守方案并记录偏差，大方向变化才询问用户。
-- 每个任务完成后运行对应验证、更新 notes、提交并推送 `main`。
+- 每个任务完成后运行对应验证、更新 notes、提交并推送 `agent/knowledge-site-template`；最终审查通过后再合并到 `main`。
 
 ---
 
@@ -245,7 +245,7 @@ Change `Active task` to Task 2, add the fixed Playwright harness to completed ch
 ```bash
 git add README.md IMPLEMENTATION_NOTES.md .gitignore package.json package-lock.json playwright.config.js tests/site/harness.spec.js
 git commit -m "chore: add knowledge site test harness"
-git push origin main
+git push -u origin agent/knowledge-site-template
 ```
 
 Expected: commit and push succeed.
@@ -572,7 +572,7 @@ Record semantic page and visual system as completed; set Active task to Task 3. 
 ```bash
 git add IMPLEMENTATION_NOTES.md site/index.html site/assets/theme.css site/assets/layout.css tests/site/template-structure.spec.js
 git commit -m "feat: add semantic knowledge site template"
-git push origin main
+git push origin agent/knowledge-site-template
 ```
 
 Expected: commit and push succeed.
@@ -861,7 +861,7 @@ Record independent sidebars, persistence, invalid-state recovery and shortcuts a
 ```bash
 git add IMPLEMENTATION_NOTES.md site/index.html site/assets/app.js tests/site/sidebar-behavior.spec.js
 git commit -m "feat: add collapsible sidebar state"
-git push origin main
+git push origin agent/knowledge-site-template
 ```
 
 Expected: commit and push succeed.
@@ -1035,7 +1035,7 @@ Update `IMPLEMENTATION_NOTES.md`: mark all four template tasks complete, list th
 ```bash
 git add README.md IMPLEMENTATION_NOTES.md tests/site site
 git commit -m "test: verify responsive knowledge site template"
-git push origin main
+git push origin agent/knowledge-site-template
 ```
 
 Expected: commit and push succeed.
@@ -1049,13 +1049,13 @@ npm test
 git diff --check
 git status -sb
 git rev-parse HEAD
-git ls-remote origin refs/heads/main
+git ls-remote origin refs/heads/agent/knowledge-site-template
 ```
 
 Required evidence:
 
 - 19 Playwright tests pass.
 - Desktop, laptop and mobile screenshots match tracked baselines.
-- Local `main` is clean and equals remote `main`.
+- Local `agent/knowledge-site-template` is clean and equals its remote branch.
 - No remote runtime resources, secrets, model weights, datasets or checkpoints are tracked.
 - `IMPLEMENTATION_NOTES.md` contains completed checkpoints, deviations, evidence gaps and next actions.
