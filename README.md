@@ -18,6 +18,14 @@ Open `http://127.0.0.1:4173/site/`.
 npm test
 ```
 
+## Template behavior
+
+- Desktop: both sidebars expanded by default
+- Laptop: evidence sidebar collapsed by default
+- Mobile: both sidebars open as drawers
+- Shortcuts: `Alt+[` and `Alt+]`
+- Runtime: local static HTML/CSS/JavaScript only
+
 ## Scope boundary
 
 The repository studies existing migration projects. It does not claim that Qwen3-TTS training has been ported or validated on Ascend 910B.

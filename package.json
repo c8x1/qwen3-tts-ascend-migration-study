@@ -7,7 +7,7 @@
     "serve": "python3 -m http.server 4173",
     "test": "playwright test",
     "test:headed": "playwright test --headed",
-    "test:update-snapshots": "playwright test --update-snapshots"
+    "test:update-snapshots": "playwright test --update-snapshots=all"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.12.1",
