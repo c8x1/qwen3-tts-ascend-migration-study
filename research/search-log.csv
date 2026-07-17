@@ -1,1 +1,6 @@
 query_id,channel,query,run_at,result_count,accepted_ids,notes
+QRY-001,Web search,Qwen3-TTS official GitHub training,2026-07-17T12:23:00+08:00,33,,Tool-visible returned items only not an engine total; official GitHub result was retained as source evidence and no candidate was accepted
+QRY-002,Web search,Qwen3-TTS official technical report architecture,2026-07-17T12:24:00+08:00,34,,Tool-visible returned items only not an engine total; official arXiv v1 was retained as source evidence and no candidate was accepted
+QRY-003,Web search,Qwen3-TTS official ModelScope training fine-tuning,2026-07-17T12:25:00+08:00,32,,Tool-visible returned items only not an engine total; official ModelScope and GitHub results were retained as source evidence and no candidate was accepted
+QRY-004,Web search,Qwen3-TTS official Hugging Face model card,2026-07-17T12:26:00+08:00,14,,Tool-visible returned items only not an engine total; Qwen organization assets were retained as source evidence and no candidate was accepted
+QRY-005,Web search,Qwen3-TTS CUDA NCCL flash attention training,2026-07-17T12:27:00+08:00,32,,Tool-visible returned items only not an engine total; official repository evidence was retained and no official NCCL result or candidate was accepted

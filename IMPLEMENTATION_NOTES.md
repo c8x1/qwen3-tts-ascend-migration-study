@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Phase 1 reference-project selection
-- Active task: Task 2 review remediation complete
-- Last verified baseline: Phase 1 Task 2 review remediation — real skeleton valid, 15/15 Python unit tests passed, and whitespace/no-site-change audits clean on 2026-07-17; Playwright was not rerun because the review prohibited site changes
+- Active task: Task 3 official Qwen3-TTS target baseline complete
+- Last verified baseline: Phase 1 Task 3 — research data valid, 15/15 Python validator unit tests passed, all 12 required report sections and numeric source references were present, 13 unique full SHAs were recorded, every non-table factual paragraph ended in a source ID, and whitespace/no-site-change audits were clean on 2026-07-17; Playwright was not run because Task 3 prohibits site changes
 
 ## Completed checkpoints
 
@@ -14,6 +14,7 @@
 - Task 2 standard-library validator established for CSV headers, IDs, enums, URLs, dates, score bounds and totals, and candidate evidence references
 - Task 2 review hard gates established for Ascend 910B scope, evidence-bound environment changes, lifecycle/scale coverage, MindSpeed priority, mature-project admission, and main-versus-satellite roles
 - Task 2 review validator remediation enforces audited/recommended evidence, rejected evidence or reason, search-row integrity, candidate references, and exception-free malformed-row reporting
+- Task 3 official evidence integrated and verified at fixed Qwen3-TTS source revision `022e286b98fbec7e1e916cb940cdf532cd9f488e`, arXiv `2601.15621v1`, and full official Hugging Face/ModelScope asset revisions
 - Template visual and interaction specification approved
 - Task 1 complete: fixed-dependency Playwright harness established and verified
 - Task 2 complete: semantic three-column page and local visual system implemented and verified
@@ -67,6 +68,8 @@
 | DEV-009 | 2026-07-17 | Third whole-branch review tooltip hit testing | A tooltip may have non-zero geometry yet still paint below the adjacent article; permanently enabling pointer events would also let invisible tooltips intercept input | Raise only collapsed sidebar grid items above the article and enable tooltip pointer events only in their visible hover/focus-visible states | This makes browser hit testing an observable paint-order contract without adding portals or a global overlay | Three interior points per tooltip resolve to the tooltip/link stack for all eight destinations and both interaction modes; normal page content remains the target while tooltips are inactive | The shell gains a new overlay/stacking context or tooltips contain interactive controls that need a different dismissal model |
 | DEV-010 | 2026-07-17 | Third whole-branch review optional evidence | Future generated pages may omit individual evidence regions or the entire right rail, and static empty placeholders waste space | Associate content, cards, and shortcuts declaratively and keep their availability synchronized with a narrowly scoped MutationObserver | This supports both initial generation and dynamic content replacement without page-specific JavaScript branches | Partial content keeps the rail/toggle usable; all-empty content removes the rail track and expands the article | The site generator guarantees complete per-page region metadata at build time and can perform the same pruning statically |
 | DEV-011 | 2026-07-17 | Phase 1 Task 2 evidence contracts | CSV consumers may run across tools and operating systems with different defaults for encoding, line endings, and list serialization | Standardize the three evidence files as UTF-8 without BOM, LF-terminated comma-separated records in exact header order; use `|` only for multi-ID fields | Python's standard `csv` module reads this format without extra dependencies, while explicit list delimiters keep the tabular schema stable | Research records remain portable and deterministic; producers must quote CSV text fields and preserve exact header order | A downstream required tool cannot consume UTF-8/LF or the schema is formally versioned with a different serialization |
+| DEV-012 | 2026-07-17 | Phase 1 Task 3 official baseline | Public Qwen3-TTS code exposes only a narrow SFT recipe while the technical report describes non-public pretraining and post-training stages | Treat only the fixed-tree 12Hz Base single-speaker SFT path as public training code; label pretraining, DPO, GSPO, tokenizer training, executable evaluation, NCCL, single-node 8-card and multi-node details as unknown or project claims | Framework abstractions and report claims cannot establish a reproducible implementation or tested hardware scale | The target baseline remains conservative and forces later reference projects to supply missing lifecycle and distributed evidence | Qwen publishes fixed-revision code, launch configs, logs or reproducible artifacts for the missing stages |
+| DEV-013 | 2026-07-17 | Phase 1 Task 3 query logging | The web-search tool exposes selected visible results but not a search-engine total | Record only the number of tool-visible result items and state that boundary in every Task 3 query row | Preserves an observable non-negative integer without inventing an unavailable global hit count | Result counts are comparable only as captured tool output and not as coverage metrics | The search provider exposes a stable per-query total and pagination contract |
 
 ## Evidence gaps
 
@@ -74,7 +77,11 @@
 - Visual regression coverage is intentionally limited to Chromium on Darwin at the three approved viewports.
 - Print verification covers visibility under emulated print media, not physical-printer output or multi-page pagination details.
 - The no-script search fallback leads to the complete chapter index; a future multi-page content build still needs a generated static search index or server-backed search.
+- Qwen3-TTS pretraining S1/S2/S3, DPO, GSPO, tokenizer-training and executable evaluation code are absent from the audited fixed public tree; their data pipelines, objectives, hyperparameters, checkpointing and reproducibility remain unknown.
+- The official tree provides no project launcher or tested evidence for NCCL, single-node 8-card or multi-node training; Accelerate wrapper points do not establish correctness, scaling or fault tolerance.
+- No CUDA, FlashAttention, NCCL, CANN, torch-npu, MindSpeed or Ascend 910B execution was performed; all compatibility, precision, kernel and performance behavior remains pending hardware validation.
+- Official performance, quality, streaming, dataset-scale and benchmark statements remain project claims because this task did not download weights/data or reproduce the runs.
 
 ## Next actions
 
-1. Reconstruct the official Qwen3-TTS target baseline at a fixed revision.
+1. Audit candidate reference projects against the official Qwen3-TTS target-module checklist and the documented training/distributed evidence gaps.

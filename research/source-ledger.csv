@@ -1,1 +1,6 @@
 source_id,title,url,publisher,source_grade,accessed_at,used_for,archive_status
+SRC-001,QwenLM Qwen3-TTS source tree at 022e286b98fbec7e1e916cb940cdf532cd9f488e,https://github.com/QwenLM/Qwen3-TTS/tree/022e286b98fbec7e1e916cb940cdf532cd9f488e,QwenLM,S,2026-07-17,Canonical repository map architecture SFT data flow and dependency audit,live
+SRC-002,Qwen3-TTS commit 022e286b98fbec7e1e916cb940cdf532cd9f488e,https://github.com/QwenLM/Qwen3-TTS/commit/022e286b98fbec7e1e916cb940cdf532cd9f488e,QwenLM,S,2026-07-17,Fixed revision provenance date subject and license boundary,live
+SRC-003,Qwen3-TTS Technical Report arXiv 2601.15621v1,https://arxiv.org/abs/2601.15621v1,Qwen Team,S,2026-07-17,Official architecture tokenizer training-stage efficiency and evaluation claims,live
+SRC-004,Qwen3-TTS official Hugging Face collection,https://huggingface.co/collections/Qwen/qwen3-tts,Qwen,S,2026-07-17,Official released model and tokenizer inventory with asset revisions recorded in baseline,live
+SRC-005,Qwen3-TTS official ModelScope collection,https://modelscope.cn/collections/Qwen/Qwen3-TTS,Qwen,S,2026-07-17,Official released inventory and asset Git revisions recorded in baseline,live
