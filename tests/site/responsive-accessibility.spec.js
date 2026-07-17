@@ -12,7 +12,7 @@ test('mobile starts closed, opens a drawer, traps focus, and Escape restores foc
   await expect(page.locator('#evidence-rail')).toHaveAttribute('inert', '');
   await page.locator('[data-close-drawer="left"]').focus();
   await page.keyboard.press('Tab');
-  await expect(page.locator('#chapter-nav a').first()).toBeFocused();
+  await expect(page.locator('#chapter-nav .sidebar-content a').first()).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.locator('html')).not.toHaveAttribute('data-drawer-open', /.+/);
   await expect(page.locator('#chapter-nav')).toHaveAttribute('inert', '');
@@ -41,12 +41,13 @@ test('all content remains visible without JavaScript', async ({ browser }) => {
   await context.close();
 });
 
-test('template has no serious accessibility violations', async ({ page }) => {
+test('template has no WCAG A or AA accessibility violations', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/site/');
-  const results = await new AxeBuilder({ page }).analyze();
-  const serious = results.violations.filter((item) => ['serious', 'critical'].includes(item.impact));
-  expect(serious).toEqual([]);
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(results.violations).toEqual([]);
 });
 
 test('print hides navigation and keeps evidence', async ({ page }) => {

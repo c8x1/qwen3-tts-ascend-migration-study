@@ -23,6 +23,11 @@ npm test
 - Desktop: both sidebars expanded by default
 - Laptop: evidence sidebar collapsed by default
 - Mobile: both sidebars open as drawers
+- Collapsed rails: real keyboard-focusable destinations with visible tooltips
+- Chapter tree: reusable nested disclosures with automatic current-path expansion
+- Mobile header: current chapter plus a focusable search control
+- Source excerpts: copy action and immutable official GitHub line links
+- No JavaScript: complete navigation, article, evidence, links, and search form remain readable
 - Shortcuts: `Alt+[` and `Alt+]`
 - Runtime: local static HTML/CSS/JavaScript only
 

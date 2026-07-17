@@ -1009,10 +1009,10 @@ Run:
 npm test
 git diff --check
 git status --short
-git ls-files | rg '(^|/)(\.env|models|weights|datasets|checkpoints)/|\.(pem|key)$' && exit 1 || true
+git ls-files | rg '(^|/)(\.env($|\.)|(models|weights|datasets|checkpoints)(/|$))|\.(pem|key)$' && exit 1 || true
 ```
 
-Expected: 24 tests passed; whitespace check is clean; only intended template, tests, notes, README, package and snapshot files are changed; restricted-path audit finds nothing.
+Expected: all tests pass; whitespace check is clean; only intended template, tests, notes, README, package and snapshot files are changed; restricted-path audit finds nothing. The audit matches standalone `.env`, `.env.*`, restricted directories at any depth, and `.pem`/`.key` files.
 
 - [ ] **Step 6: 完成 README 与 notes**
 

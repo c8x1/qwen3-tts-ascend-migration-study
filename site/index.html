@@ -8,11 +8,17 @@
   <link rel="stylesheet" href="assets/theme.css">
   <link rel="stylesheet" href="assets/layout.css">
 </head>
-<body>
+<body id="top">
   <header class="site-header">
     <div class="brand">Qwen3-TTS × Ascend <small>Migration Field Notes</small></div>
-    <label class="search"><span class="sr-only">搜索</span><input type="search" placeholder="搜索文件、类、配置项、证据编号"></label>
-    <div class="revision">主参考项目 · commit 8f21c4a</div>
+    <div class="mobile-chapter-title" aria-label="当前章节">HCCL 并行初始化</div>
+    <form id="site-search" class="search" role="search" action="." method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">MindSpeed · commit b8d8b936</div>
   </header>
 
   <div class="site-shell">
@@ -21,14 +27,42 @@
       <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
     </div>
     <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
-      <div class="rail-icons" aria-hidden="true"><span>⌂</span><span>▤</span><span>⌘</span><span>↔</span></div>
+      <div class="rail-icons" aria-label="章节快捷入口">
+        <a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a>
+        <a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a>
+        <a class="rail-link" href="#source"><span aria-hidden="true">⌘</span><span class="rail-tooltip">源码索引</span></a>
+      </div>
       <div class="sidebar-content">
         <p class="nav-label">学习路径</p>
         <a href="#">01 · 项目与证据</a><a href="#">02 · Ascend 基础</a>
         <p class="nav-label">源码走读</p>
-        <a href="#">03 · 训练入口</a><a class="active" href="#" aria-current="page">04 · 分布式初始化</a>
-        <a class="sub" href="#call-chain">4.1 设备绑定</a><a class="sub" href="#source">4.2 HCCL 通信域</a><a class="sub" href="#verification">4.3 模型并行状态</a>
-        <a href="#">05 · 数据流水线</a><a href="#">06 · 模型与 Loss</a><a href="#">07 · Checkpoint</a>
+        <ul id="chapter-tree" class="chapter-tree">
+          <li class="tree-node">
+            <button class="tree-toggle" type="button" aria-expanded="false" aria-controls="tree-training">训练工程</button>
+            <ul id="tree-training" class="tree-branch" data-default-expanded="false">
+              <li><a href="#">03.1 · 参数与入口</a></li>
+              <li class="tree-node">
+                <button class="tree-toggle" type="button" aria-expanded="false" aria-controls="tree-launchers">启动方式</button>
+                <ul id="tree-launchers" class="tree-branch" data-default-expanded="false"><li><a href="#">单机 torchrun</a></li><li><a href="#">多机编排</a></li></ul>
+              </li>
+            </ul>
+          </li>
+          <li class="tree-node">
+            <button class="tree-toggle" type="button" aria-expanded="false" aria-controls="tree-distributed">分布式初始化</button>
+            <ul id="tree-distributed" class="tree-branch" data-default-expanded="false">
+              <li><a class="sub" href="#call-chain">4.1 设备绑定</a></li>
+              <li class="tree-node">
+                <button class="tree-toggle" type="button" aria-expanded="false" aria-controls="tree-hccl">HCCL 通信域</button>
+                <ul id="tree-hccl" class="tree-branch" data-default-expanded="false">
+                  <li><a class="active sub" href="#source" aria-current="page">4.2.1 HCCL 源码</a></li>
+                  <li><a class="sub" href="#verification">4.2.2 验证方法</a></li>
+                </ul>
+              </li>
+              <li><a class="sub" href="#verification">4.3 模型并行状态</a></li>
+            </ul>
+          </li>
+          <li><a href="#">05 · 数据流水线</a></li><li><a href="#">06 · 模型与 Loss</a></li><li><a href="#">07 · Checkpoint</a></li>
+        </ul>
         <p class="nav-label">迁移映射</p>
         <a href="#">NVIDIA → Ascend</a><a href="#">未来实验清单</a>
       </div>
@@ -50,38 +84,60 @@
 
         <section id="source">
           <h2>2. 关键源码</h2>
-          <div class="code-header"><span>mindspeed/training/initialize.py · L142</span><span>复制 · GitHub ↗</span></div>
-          <pre><code><span class="kw">def</span> <span class="fn">initialize_distributed</span>(args):
-    <span class="cm"># 先绑定本地设备，再创建默认通信域</span>
-    torch_npu.npu.set_device(args.local_rank)
-    dist.init_process_group(
-        backend=<span class="str">"hccl"</span>,
-        world_size=args.world_size,
-        rank=args.rank,
+          <div class="code-header">
+            <span>mindspeed/core/parallel_state.py · L424–L445</span>
+            <span class="code-actions"><button class="copy-source" type="button" data-copy-target="source-code">复制</button><span class="copy-status" role="status" aria-live="polite"></span><a class="source-link print-url" style="--print-url: 'https://github.com/Ascend/MindSpeed/blob/b8d8b936f9793aa211baf88b6f501ccbc4aed02b/mindspeed/core/parallel_state.py#L424-L445'" href="https://github.com/Ascend/MindSpeed/blob/b8d8b936f9793aa211baf88b6f501ccbc4aed02b/mindspeed/core/parallel_state.py#L424-L445">固定源码 ↗</a></span>
+          </div>
+          <pre tabindex="0" aria-label="MindSpeed 并行组初始化源码"><code id="source-code">global _PIPELINE_MODEL_PARALLEL_GROUP_FOR_NEW_STREAM
+if _PIPELINE_MODEL_PARALLEL_GROUP_FOR_NEW_STREAM is not None:
+    raise AttributeError('Pipeline parallel group for new stream is already initialized')
+num_pipeline_model_parallel_groups: int = world_size // pipeline_model_parallel_size
+for i in range(num_pipeline_model_parallel_groups):
+    ranks = range(i, world_size, num_pipeline_model_parallel_groups)
+    group = torch.distributed.new_group(
+        ranks, pg_options=megatron.core.parallel_state.get_nccl_options('pp_new_stream', nccl_comm_cfgs)
     )
-    parallel_state.initialize_model_parallel(
-        tensor_model_parallel_size=args.tensor_parallel_size
-    )</code></pre>
+    if rank in ranks:
+        _PIPELINE_MODEL_PARALLEL_GROUP_FOR_NEW_STREAM = group
+
+from megatron.training import get_args
+args = get_args()
+nd1_dim1_sz = args.nd1_dim1_size if args.use_nd_matmul else args.tp_x
+nd2_dim1_sz = args.nd2_dim1_size if args.use_nd_matmul else args.tp_y
+initialize_ndmm_parallel_group(
+    nccl_comm_cfgs,
+    tensor_model_parallel_size=tensor_model_parallel_size,
+    nd1_dim1_size=nd1_dim1_sz,
+    nd2_dim1_size=nd2_dim1_sz,
+)</code></pre>
+          <p class="source-note">固定于 MindSpeed commit <code>b8d8b936…</code>；此处展示该版本第 424–445 行的并行组初始化片段。</p>
         </section>
 
         <section id="verification">
           <h2>3. 验证方法</h2>
           <p>先检查每个进程的设备绑定和全局 rank，再验证默认 HCCL 进程组以及模型并行通信组的成员关系。</p>
         </section>
+        <nav class="page-nav" aria-label="相邻章节"><a href="#">← 上一页：训练入口</a><a href="#">下一页：数据流水线 →</a></nav>
       </article>
     </main>
 
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
-      <div class="rail-icons" aria-hidden="true"><span>§</span><span>✓</span><span>⚠</span><span>↗</span></div>
+      <div class="rail-icons" aria-label="证据快捷入口">
+        <a class="rail-link" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a>
+        <a class="rail-link" href="#evidence-status"><span aria-hidden="true">✓</span><span class="rail-tooltip">证据</span></a>
+        <a class="rail-link" href="#citations"><span aria-hidden="true">↗</span><span class="rail-tooltip">引用</span></a>
+      </div>
       <div class="sidebar-content">
-        <section class="rail-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>
-        <section class="rail-card"><h2>证据状态</h2><p>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
+        <section id="page-toc" class="rail-card toc-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>
+        <section id="evidence-status" class="rail-card"><h2>证据状态</h2><p>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
         <section class="rail-card"><h2>迁移提醒</h2><p>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
+        <section id="citations" class="rail-card"><h2>引用</h2><a class="citation-link print-url" style="--print-url: 'https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b'" href="https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b">Ascend / MindSpeed 固定版本</a></section>
       </div>
       <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
     </aside>
   </div>
   <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 迁移学习站 · 源码引用均固定 commit，迁移结论需以真机复验为准。</p></footer>
   <script type="module" src="assets/app.js"></script>
 </body>
 </html>

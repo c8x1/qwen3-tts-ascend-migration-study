@@ -178,4 +178,111 @@ export class SidebarController {
   }
 }
 
+class ChapterTreeController {
+  constructor(documentRef = document) {
+    this.document = documentRef;
+    this.buttons = [...documentRef.querySelectorAll('.tree-toggle[aria-controls]')];
+  }
+
+  setExpanded(button, expanded) {
+    const branch = this.document.getElementById(button.getAttribute('aria-controls'));
+    if (!branch) return;
+    button.setAttribute('aria-expanded', String(expanded));
+    branch.hidden = !expanded;
+  }
+
+  init() {
+    this.buttons.forEach((button) => {
+      const branch = this.document.getElementById(button.getAttribute('aria-controls'));
+      this.setExpanded(button, branch?.dataset.defaultExpanded === 'true');
+      button.addEventListener('click', () => this.setExpanded(button, button.getAttribute('aria-expanded') !== 'true'));
+    });
+
+    let branch = this.document.querySelector('[aria-current="page"]')?.closest('.tree-branch');
+    while (branch) {
+      const button = this.document.querySelector(`[aria-controls="${branch.id}"]`);
+      if (button) this.setExpanded(button, true);
+      branch = branch.parentElement?.closest('.tree-branch');
+    }
+  }
+}
+
+class SearchController {
+  constructor(documentRef = document) {
+    this.document = documentRef;
+    this.root = documentRef.documentElement;
+    this.button = documentRef.querySelector('.search-enhancement');
+    this.form = documentRef.querySelector('#site-search');
+    this.input = this.form?.querySelector('input[type="search"]');
+  }
+
+  close() {
+    this.root.classList.remove('search-open');
+    this.button?.setAttribute('aria-expanded', 'false');
+    this.button?.setAttribute('aria-label', '打开站内搜索');
+  }
+
+  init() {
+    this.button?.addEventListener('click', () => {
+      const opening = !this.root.classList.contains('search-open');
+      if (!opening) {
+        this.close();
+        return;
+      }
+      this.root.classList.add('search-open');
+      this.button.setAttribute('aria-expanded', 'true');
+      this.button.setAttribute('aria-label', '关闭站内搜索');
+      this.input?.focus();
+    });
+    this.form?.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        this.close();
+        this.button?.focus();
+      }
+    });
+  }
+}
+
+class CopyController {
+  constructor(documentRef = document, navigatorRef = navigator) {
+    this.document = documentRef;
+    this.navigator = navigatorRef;
+  }
+
+  async copy(text) {
+    if (this.navigator.clipboard?.writeText) {
+      try {
+        await this.navigator.clipboard.writeText(text);
+        return true;
+      } catch {}
+    }
+
+    const textarea = this.document.createElement('textarea');
+    textarea.value = text;
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    this.document.body.append(textarea);
+    textarea.select();
+    let copied = false;
+    try { copied = this.document.execCommand('copy'); } catch {}
+    textarea.remove();
+    return copied;
+  }
+
+  init() {
+    this.document.querySelectorAll('.copy-source[data-copy-target]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        const source = this.document.getElementById(button.dataset.copyTarget);
+        const status = button.parentElement?.querySelector('.copy-status');
+        const copied = await this.copy(source?.textContent ?? '');
+        if (status) status.textContent = copied ? '已复制' : '请手动复制';
+      });
+    });
+  }
+}
+
 new SidebarController().init();
+new ChapterTreeController().init();
+new SearchController().init();
+new CopyController().init();
