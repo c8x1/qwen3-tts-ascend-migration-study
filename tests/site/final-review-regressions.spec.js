@@ -30,6 +30,29 @@ async function paintedArea(locator) {
   });
 }
 
+async function topPaintedPoints(link) {
+  return link.locator('.rail-tooltip').evaluate((tooltip) => {
+    const rect = tooltip.getBoundingClientRect();
+    const points = [
+      [rect.left + rect.width / 2, rect.top + rect.height / 2],
+      [rect.left + Math.min(8, rect.width / 4), rect.top + rect.height / 2],
+      [rect.right - Math.min(8, rect.width / 4), rect.top + rect.height / 2],
+    ];
+    return points.map(([x, y]) => {
+      const stack = document.elementsFromPoint(x, y);
+      const top = document.elementFromPoint(x, y);
+      return {
+        x,
+        y,
+        topTag: top?.tagName ?? null,
+        topClass: top?.className ?? null,
+        painted: Boolean(top && (top === tooltip || tooltip.contains(top) || tooltip.parentElement.contains(top))),
+        stack: stack.slice(0, 4).map((node) => `${node.tagName}.${node.className}`),
+      };
+    });
+  });
+}
+
 test('collapsed rails paint every named keyboard destination and tooltip inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/site/');
@@ -44,6 +67,9 @@ test('collapsed rails paint every named keyboard destination and tooltip inside 
       else await link.focus();
       if (interaction === 'focus') await expect(link).toBeFocused();
       expect(await paintedArea(link.locator('.rail-tooltip')), `${name} ${interaction} tooltip is actually painted`).toBeGreaterThan(0);
+      const points = await topPaintedPoints(link);
+      expect(points, `${name} ${interaction} tooltip hit-test: ${JSON.stringify(points)}`)
+        .toEqual(points.map((point) => expect.objectContaining({ painted: true })));
     }
   }
 });
@@ -160,17 +186,45 @@ test('long content, deeper chapter tree, empty evidence, and absent TOC form an 
     const tree = document.querySelector('#tree-training');
     tree.hidden = false;
     tree.insertAdjacentHTML('beforeend', '<li><ul class="tree-branch"><li><ul class="tree-branch"><li><a href="#source">第六层源码定位路径</a></li></ul></li></ul></li>');
-    document.querySelector('#evidence-rail .sidebar-content').replaceChildren();
-    document.querySelector('#evidence-rail .rail-icons').replaceChildren();
+    document.querySelectorAll('#page-toc a').forEach((link) => link.remove());
+    document.querySelector('#evidence-status p').textContent = '';
   });
   await expect(page.getByRole('link', { name: '第六层源码定位路径' })).toBeVisible();
-  await expect(page.locator('#evidence-rail .sidebar-content')).toBeEmpty();
-  await expect(page.locator('#evidence-rail .rail-icons')).toBeEmpty();
-  for (const name of ['目录', '证据', '警示', '引用']) {
-    await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
+  await expect(page.locator('#page-toc')).toBeHidden();
+  await expect(page.locator('#evidence-status')).toBeHidden();
+  await expect(page.getByRole('link', { name: '目录', exact: true })).toBeHidden();
+  await expect(page.getByRole('link', { name: '证据', exact: true })).toBeHidden();
+  await expect(page.locator('#migration-warning')).toBeVisible();
+  await expect(page.locator('#citations')).toBeVisible();
+  await expect(page.locator('#toggle-right')).toBeVisible();
+  await page.locator('#toggle-right').click();
+  for (const name of ['警示', '引用']) {
+    const link = page.getByRole('link', { name, exact: true });
+    await expect(link).toBeVisible();
+    await link.focus();
+    await expect(link).toBeFocused();
   }
   await expect(page.locator('#article-content')).toBeVisible();
   await expect(page.locator('#evidence-rail')).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectWcagAA(page);
+});
+
+test('all-empty evidence content removes its rail and toggle and expands the article column', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/site/');
+  const before = await page.locator('#article-content').boundingBox();
+  await page.evaluate(() => {
+    document.querySelectorAll('[data-rail-content]').forEach((node) => {
+      if (node.matches('a')) node.remove();
+      else node.textContent = '';
+    });
+  });
+  await expect(page.locator('html')).toHaveAttribute('data-right-content', 'empty');
+  await expect(page.locator('#evidence-rail')).toBeHidden();
+  await expect(page.locator('#toggle-right')).toBeHidden();
+  const after = await page.locator('#article-content').boundingBox();
+  expect(after.width).toBeGreaterThan(before.width);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectWcagAA(page);
 });

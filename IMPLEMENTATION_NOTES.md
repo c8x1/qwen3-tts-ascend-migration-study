@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Knowledge-site template
-- Active task: Second whole-branch review remediation complete
-- Last verified baseline: Second whole-branch review remediation — 38/38 Playwright tests passed on 2026-07-17
+- Active task: Third whole-branch review remediation complete
+- Last verified baseline: Third whole-branch review remediation — 39/39 Playwright tests passed on 2026-07-17
 
 ## Completed checkpoints
 
@@ -36,6 +36,11 @@
 - Second whole-branch review remediation: edge fixtures run complete WCAG A/AA axe analysis after injecting long paths/titles and deeper trees, removing the page TOC and evidence content/entries, and applying the 720 CSS-pixel reflow equivalent of a 1440-pixel window at 200% zoom
 - Second whole-branch review remediation: adjacent-page links use distinct, stable relative template paths instead of placeholder hash targets
 - Second whole-branch completion verification: 38/38 Playwright tests passed; desktop/laptop/mobile snapshots passed zero-diff revalidation and were inspected at original resolution; only the laptop pixels changed because its collapsed right rail now includes the required warning destination
+- Third whole-branch review remediation: tooltip verification now checks three representative points with `elementsFromPoint()`/`elementFromPoint()` for every rail destination under both hover and keyboard focus; the collapsed rail stacking context and visible-only pointer targeting keep all points above the article while leaving inactive tooltips non-intercepting
+- Third whole-branch review remediation: optional evidence cards and shortcuts are linked through `data-rail-card`, `data-rail-content`, and `data-rail-target`; a MutationObserver hides empty TOC/evidence regions while preserving populated warning/citation regions
+- Third whole-branch review remediation: when every evidence region becomes empty, the controller closes an open right drawer, hides and disables the right toggle/rail, and switches the grid to a zero-width right track so the article column expands without horizontal overflow
+- Third-review visual revalidation: all three existing desktop/laptop/mobile snapshots passed with zero diff, so no baseline regeneration was required
+- Third whole-branch completion verification: 39/39 Playwright tests passed, including the original 38 checks and the new all-empty evidence-layout regression
 
 ## Major decisions requiring user confirmation
 
@@ -54,6 +59,8 @@
 | DEV-006 | 2026-07-17 | Whole-branch review source fixture | A moving branch name or illustrative hash would make the template's source evidence unverifiable over time | Resolve the official GitHub remote HEAD, pin the full `b8d8b936…` commit, fetch the raw file, and show only the exact 424–445 line range behind an immutable link | The template must teach evidence discipline and must not imply that a fabricated snippet is official source | The sample remains reproducible even as MindSpeed advances; it is explicitly a template fixture, not a claim that this is Qwen3-TTS's eventual migration hook | Phase 1 selects a different main reference project or replaces the template fixture with a research-backed page |
 | DEV-007 | 2026-07-17 | Whole-branch review reflow test | CSS `zoom: 2` scales the document box itself and creates artificial overflow unlike browser 200% zoom, which halves the layout viewport | Exercise a 720 CSS-pixel viewport as the 200% reflow equivalent of a 1440 CSS-pixel window, open the real chapter drawer, and inject long paths plus a visibly painted sixth-level tree path | This tests WCAG-style reflow behavior without conflating page zoom CSS with browser zoom, while keeping the deep fixture observable rather than inert/offscreen | Automated coverage reflects the layout viewport users receive at 200%; physical/browser chrome is outside Playwright's page model | Cross-browser zoom automation becomes part of the project or a browser exposes stable zoom controls to Playwright |
 | DEV-008 | 2026-07-17 | Second whole-branch review collapsed rails | Tooltip elements positioned outside a `2.5rem` rail cannot be painted through an ancestor whose overflow is clipped | Keep collapsed rail content minimal and set only the collapsed sidebar container to `overflow: visible`; retain scrollable overflow while expanded | The tooltip remains attached to its semantic link and can escape the rail without portals, duplicated controls, or remote/runtime dependencies | All eight hover/focus tooltips are visibly painted and keyboard focus retains the approved rail geometry | A future rail adds enough destinations to exceed the viewport height or introduces content other than the bounded shortcut list |
+| DEV-009 | 2026-07-17 | Third whole-branch review tooltip hit testing | A tooltip may have non-zero geometry yet still paint below the adjacent article; permanently enabling pointer events would also let invisible tooltips intercept input | Raise only collapsed sidebar grid items above the article and enable tooltip pointer events only in their visible hover/focus-visible states | This makes browser hit testing an observable paint-order contract without adding portals or a global overlay | Three interior points per tooltip resolve to the tooltip/link stack for all eight destinations and both interaction modes; normal page content remains the target while tooltips are inactive | The shell gains a new overlay/stacking context or tooltips contain interactive controls that need a different dismissal model |
+| DEV-010 | 2026-07-17 | Third whole-branch review optional evidence | Future generated pages may omit individual evidence regions or the entire right rail, and static empty placeholders waste space | Associate content, cards, and shortcuts declaratively and keep their availability synchronized with a narrowly scoped MutationObserver | This supports both initial generation and dynamic content replacement without page-specific JavaScript branches | Partial content keeps the rail/toggle usable; all-empty content removes the rail track and expands the article | The site generator guarantees complete per-page region metadata at build time and can perform the same pruning statically |
 
 ## Evidence gaps
 

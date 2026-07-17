@@ -124,16 +124,16 @@ initialize_ndmm_parallel_group(
 
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
       <div class="rail-icons" aria-label="证据快捷入口">
-        <a class="rail-link" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a>
-        <a class="rail-link" href="#evidence-status"><span aria-hidden="true">✓</span><span class="rail-tooltip">证据</span></a>
-        <a class="rail-link" href="#migration-warning"><span aria-hidden="true">⚠</span><span class="rail-tooltip">警示</span></a>
-        <a class="rail-link" href="#citations"><span aria-hidden="true">↗</span><span class="rail-tooltip">引用</span></a>
+        <a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a>
+        <a class="rail-link" data-rail-target="evidence-status" href="#evidence-status"><span aria-hidden="true">✓</span><span class="rail-tooltip">证据</span></a>
+        <a class="rail-link" data-rail-target="migration-warning" href="#migration-warning"><span aria-hidden="true">⚠</span><span class="rail-tooltip">警示</span></a>
+        <a class="rail-link" data-rail-target="citations" href="#citations"><span aria-hidden="true">↗</span><span class="rail-tooltip">引用</span></a>
       </div>
       <div class="sidebar-content">
-        <section id="page-toc" class="rail-card toc-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>
-        <section id="evidence-status" class="rail-card"><h2>证据状态</h2><p>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
-        <section id="migration-warning" class="rail-card"><h2>迁移提醒</h2><p>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
-        <section id="citations" class="rail-card"><h2>引用</h2><a class="citation-link print-url" style="--print-url: 'https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b'" href="https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b">Ascend / MindSpeed 固定版本</a></section>
+        <section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#call-chain">调用链位置</a><a data-rail-content href="#source">关键源码</a><a data-rail-content href="#verification">验证方法</a></section>
+        <section id="evidence-status" class="rail-card" data-rail-card><h2>证据状态</h2><p data-rail-content>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
+        <section id="migration-warning" class="rail-card" data-rail-card><h2>迁移提醒</h2><p data-rail-content>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
+        <section id="citations" class="rail-card" data-rail-card><h2>引用</h2><a data-rail-content class="citation-link print-url" style="--print-url: 'https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b'" href="https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b">Ascend / MindSpeed 固定版本</a></section>
       </div>
       <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
     </aside>

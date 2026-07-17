@@ -17,6 +17,7 @@
   background: var(--canvas);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--canvas); color: var(--ink); }
 button, input { font: inherit; }
@@ -78,7 +79,7 @@ pre { margin: 0; padding: 1rem; overflow-x: auto; border-radius: 0 0 .55rem .55r
 .rail-link:hover { background: rgb(147 71 53 / 10%); }
 .rail-tooltip { position: absolute; z-index: 60; left: calc(100% + .45rem); top: 50%; width: max-content; padding: .28rem .48rem; border: 1px solid #bba88f; border-radius: .3rem; color: #fffaf2; background: #493b30; font-size: .7rem; opacity: 0; pointer-events: none; transform: translateY(-50%); }
 .evidence-rail .rail-tooltip { right: calc(100% + .45rem); left: auto; }
-.rail-link:hover .rail-tooltip, .rail-link:focus-visible .rail-tooltip { opacity: 1; }
+.rail-link:hover .rail-tooltip, .rail-link:focus-visible .rail-tooltip { opacity: 1; pointer-events: auto; }
 .drawer-close { display: none; width: 100%; margin-top: 1rem; padding: .65rem; }
 .page-nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; margin-top: 2rem; padding-top: 1.25rem; border-top: 1px solid #ddd0bf; }
 .page-nav a { color: var(--accent); }

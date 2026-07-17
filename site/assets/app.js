@@ -282,7 +282,53 @@ class CopyController {
   }
 }
 
-new SidebarController().init();
+class EvidenceRailController {
+  constructor(documentRef = document, sidebarController = null) {
+    this.document = documentRef;
+    this.root = documentRef.documentElement;
+    this.rail = documentRef.querySelector('#evidence-rail');
+    this.toggle = documentRef.querySelector('#toggle-right');
+    this.sidebarController = sidebarController;
+    this.observer = null;
+  }
+
+  isMeaningful(node) {
+    if (!node.textContent.trim()) return false;
+    if (!node.matches('a')) return true;
+    return Boolean(node.getAttribute('href')?.trim());
+  }
+
+  sync() {
+    const cards = [...this.rail.querySelectorAll('[data-rail-card]')];
+    let available = 0;
+    cards.forEach((card) => {
+      const meaningful = [...card.querySelectorAll('[data-rail-content]')]
+        .some((node) => this.isMeaningful(node));
+      card.hidden = !meaningful;
+      const shortcut = this.rail.querySelector(`[data-rail-target="${card.id}"]`);
+      if (shortcut) shortcut.hidden = !meaningful;
+      if (meaningful) available += 1;
+    });
+
+    const empty = available === 0;
+    this.root.dataset.rightContent = empty ? 'empty' : 'available';
+    this.rail.hidden = empty;
+    this.toggle.hidden = empty;
+    this.toggle.disabled = empty;
+    if (empty && this.root.dataset.drawerOpen === 'right') this.sidebarController?.closeDrawer(false);
+  }
+
+  init() {
+    if (!this.rail || !this.toggle) return;
+    this.sync();
+    this.observer = new MutationObserver(() => this.sync());
+    this.observer.observe(this.rail, { childList: true, subtree: true, characterData: true });
+  }
+}
+
+const sidebarController = new SidebarController();
+sidebarController.init();
 new ChapterTreeController().init();
 new SearchController().init();
 new CopyController().init();
+new EvidenceRailController(document, sidebarController).init();
