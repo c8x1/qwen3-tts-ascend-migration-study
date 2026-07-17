@@ -6,16 +6,16 @@
 
 canonical 源码仓库为 `QwenLM/Qwen3-TTS`，默认分支 `main` 在本次审计固定为完整 commit `022e286b98fbec7e1e916cb940cdf532cd9f488e`；该提交的 author/committer 时间为 `2026-03-17T14:38:41+08:00`，主题为 `fix finetuning bug`。固定树与 `pyproject.toml` 声明 Apache-2.0；技术报告固定为 arXiv `2601.15621v1`，页面标注 CC BY 4.0，论文许可不外推为代码或权重许可。[SRC-001][SRC-002][SRC-003]
 
-官方 Hugging Face collection 当前列出五个 12Hz TTS 模型与一个 12Hz Tokenizer；下表同时记录 Hugging Face 与 ModelScope Git 元数据的完整 SHA。SHA 用于重放资产元数据，不代表本研究下载或执行了相应权重。[SRC-004][SRC-005]
+官方 Hugging Face 与 ModelScope collection 用于确认五个 12Hz TTS 模型和一个 12Hz Tokenizer 的发布清单，但 moving collection 不作为固定 revision 证明。下表的 Hugging Face SHA 分别回指官方 immutable commit URL；ModelScope UI 没有已核实的稳定 commit permalink，因此每个 ModelScope SHA 都由只读 `git ls-remote` 对对应官方 asset remote 的 `HEAD` 验证。SHA 只用于重放资产元数据，不代表本研究下载或执行了相应权重。[SRC-004][SRC-005][SRC-006][SRC-007][SRC-008][SRC-009][SRC-010][SRC-011][SRC-012][SRC-013][SRC-014][SRC-015][SRC-016][SRC-017]
 
 | Asset | Hugging Face `main` full SHA | ModelScope `master` full SHA | Evidence |
 | --- | --- | --- | --- |
-| `Qwen3-TTS-Tokenizer-12Hz` | [`7dd38ad4e9bad454aae9cd937d0cd577604fe229`](https://huggingface.co/Qwen/Qwen3-TTS-Tokenizer-12Hz/commit/7dd38ad4e9bad454aae9cd937d0cd577604fe229) | `d1d2fe2dbcbdc294f6962e5aa47ba394dc0cab07` | SRC-004, SRC-005 |
-| `Qwen3-TTS-12Hz-1.7B-CustomVoice` | [`0c0e3051f131929182e2c023b9537f8b1c68adfe`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/commit/0c0e3051f131929182e2c023b9537f8b1c68adfe) | `54dfa57e196341bfa4994c97ad1f0f874964eeab` | SRC-004, SRC-005 |
-| `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | [`5ecdb67327fd37bb2e042aab12ff7391903235d3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign/commit/5ecdb67327fd37bb2e042aab12ff7391903235d3) | `8dd530dbed7fda907a15ac48d7f78742cc90a065` | SRC-004, SRC-005 |
-| `Qwen3-TTS-12Hz-1.7B-Base` | [`fd4b254389122332181a7c3db7f27e918eec64e3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/commit/fd4b254389122332181a7c3db7f27e918eec64e3) | `dfb4a462f62f8f831ff0ffabf31189fc9d4344fd` | SRC-004, SRC-005 |
-| `Qwen3-TTS-12Hz-0.6B-CustomVoice` | [`85e237c12c027371202489a0ec509ded67b5e4b5`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/commit/85e237c12c027371202489a0ec509ded67b5e4b5) | `70b274883e68023af521a9199603192d58ccdd3f` | SRC-004, SRC-005 |
-| `Qwen3-TTS-12Hz-0.6B-Base` | [`5d83992436eae1d760afd27aff78a71d676296fc`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/commit/5d83992436eae1d760afd27aff78a71d676296fc) | `fda1995a3162ad0488393cc366b82ca59c91c08e` | SRC-004, SRC-005 |
+| `Qwen3-TTS-Tokenizer-12Hz` | [`7dd38ad4e9bad454aae9cd937d0cd577604fe229`](https://huggingface.co/Qwen/Qwen3-TTS-Tokenizer-12Hz/commit/7dd38ad4e9bad454aae9cd937d0cd577604fe229) | [`d1d2fe2dbcbdc294f6962e5aa47ba394dc0cab07`](https://www.modelscope.cn/Qwen/Qwen3-TTS-Tokenizer-12Hz.git) | SRC-006, SRC-012 |
+| `Qwen3-TTS-12Hz-1.7B-CustomVoice` | [`0c0e3051f131929182e2c023b9537f8b1c68adfe`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/commit/0c0e3051f131929182e2c023b9537f8b1c68adfe) | [`54dfa57e196341bfa4994c97ad1f0f874964eeab`](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice.git) | SRC-007, SRC-013 |
+| `Qwen3-TTS-12Hz-1.7B-VoiceDesign` | [`5ecdb67327fd37bb2e042aab12ff7391903235d3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign/commit/5ecdb67327fd37bb2e042aab12ff7391903235d3) | [`8dd530dbed7fda907a15ac48d7f78742cc90a065`](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign.git) | SRC-008, SRC-014 |
+| `Qwen3-TTS-12Hz-1.7B-Base` | [`fd4b254389122332181a7c3db7f27e918eec64e3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/commit/fd4b254389122332181a7c3db7f27e918eec64e3) | [`dfb4a462f62f8f831ff0ffabf31189fc9d4344fd`](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-Base.git) | SRC-009, SRC-015 |
+| `Qwen3-TTS-12Hz-0.6B-CustomVoice` | [`85e237c12c027371202489a0ec509ded67b5e4b5`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/commit/85e237c12c027371202489a0ec509ded67b5e4b5) | [`70b274883e68023af521a9199603192d58ccdd3f`](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice.git) | SRC-010, SRC-016 |
+| `Qwen3-TTS-12Hz-0.6B-Base` | [`5d83992436eae1d760afd27aff78a71d676296fc`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/commit/5d83992436eae1d760afd27aff78a71d676296fc) | [`fda1995a3162ad0488393cc366b82ca59c91c08e`](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-0.6B-Base.git) | SRC-011, SRC-017 |
 
 ## 2. Released model variants and training-related claims
 
@@ -128,7 +128,8 @@ SFT 数据链从每行包含 `audio`、`text`、`ref_audio` 的 JSONL 开始；`
 
 - canonical repo、默认分支、完整 fixed commit、提交时间/主题与代码 Apache-2.0 许可已由官方 Git 元数据和固定树确认。[SRC-001][SRC-002]
 - 固定树公开推理与两代 tokenizer modeling 源码，以及范围明确的 12Hz Base 单说话人 SFT 示例。[SRC-001]
-- 官方 Hugging Face collection 列出五个 12Hz 模型和一个 12Hz Tokenizer；相应官方资产 Git revision 已记录为完整 SHA。[SRC-004][SRC-005]
+- 官方 Hugging Face 与 ModelScope collection 列出五个 12Hz 模型和一个 12Hz Tokenizer；collections 只证明发布清单，不证明固定 revision。[SRC-004][SRC-005]
+- 六个 Hugging Face asset revision 分别由官方 immutable commit URL 证明；六个 ModelScope asset revision 分别由对应官方 remote 的只读 `git ls-remote` 证明，且没有构造未经核实的 ModelScope commit permalink。[SRC-006][SRC-007][SRC-008][SRC-009][SRC-010][SRC-011][SRC-012][SRC-013][SRC-014][SRC-015][SRC-016][SRC-017]
 - SFT 的 JSONL 字段、离线 codec 准备、BF16、FlashAttention 2、gradient accumulation 4、AdamW、clip norm 1.0、组合 loss 与按 epoch safetensors 保存可由源码直接审查。[SRC-001]
 
 ### Project claims
@@ -179,7 +180,19 @@ SFT 数据链从每行包含 `audio`、`text`、`ref_audio` 的 JSONL 开始；`
 | SRC-001 | S | [QwenLM/Qwen3-TTS tree at `022e286b98fbec7e1e916cb940cdf532cd9f488e`](https://github.com/QwenLM/Qwen3-TTS/tree/022e286b98fbec7e1e916cb940cdf532cd9f488e) | Repository map; architecture implementation; SFT/data flow; dependency and absence audit |
 | SRC-002 | S | [Commit `022e286b98fbec7e1e916cb940cdf532cd9f488e`](https://github.com/QwenLM/Qwen3-TTS/commit/022e286b98fbec7e1e916cb940cdf532cd9f488e) | Immutable revision provenance and commit metadata |
 | SRC-003 | S | [Qwen3-TTS Technical Report `arXiv:2601.15621v1`](https://arxiv.org/abs/2601.15621v1) | Official architecture; tokenizer; training; efficiency and evaluation claims |
-| SRC-004 | S | [Qwen official Hugging Face collection](https://huggingface.co/collections/Qwen/qwen3-tts) | Released inventory and official asset revisions |
-| SRC-005 | S | [Qwen official ModelScope collection](https://modelscope.cn/collections/Qwen/Qwen3-TTS) | Released inventory and official asset Git revisions |
+| SRC-004 | S | [Qwen official Hugging Face collection](https://huggingface.co/collections/Qwen/qwen3-tts) | Released inventory only; not fixed revision proof |
+| SRC-005 | S | [Qwen official ModelScope collection](https://modelscope.cn/collections/Qwen/Qwen3-TTS) | Released inventory only; not fixed revision proof |
+| SRC-006 | S | [Tokenizer 12Hz HF commit `7dd38ad4e9bad454aae9cd937d0cd577604fe229`](https://huggingface.co/Qwen/Qwen3-TTS-Tokenizer-12Hz/commit/7dd38ad4e9bad454aae9cd937d0cd577604fe229) | Immutable Hugging Face asset revision |
+| SRC-007 | S | [1.7B CustomVoice HF commit `0c0e3051f131929182e2c023b9537f8b1c68adfe`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice/commit/0c0e3051f131929182e2c023b9537f8b1c68adfe) | Immutable Hugging Face asset revision |
+| SRC-008 | S | [1.7B VoiceDesign HF commit `5ecdb67327fd37bb2e042aab12ff7391903235d3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign/commit/5ecdb67327fd37bb2e042aab12ff7391903235d3) | Immutable Hugging Face asset revision |
+| SRC-009 | S | [1.7B Base HF commit `fd4b254389122332181a7c3db7f27e918eec64e3`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base/commit/fd4b254389122332181a7c3db7f27e918eec64e3) | Immutable Hugging Face asset revision |
+| SRC-010 | S | [0.6B CustomVoice HF commit `85e237c12c027371202489a0ec509ded67b5e4b5`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/commit/85e237c12c027371202489a0ec509ded67b5e4b5) | Immutable Hugging Face asset revision |
+| SRC-011 | S | [0.6B Base HF commit `5d83992436eae1d760afd27aff78a71d676296fc`](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-Base/commit/5d83992436eae1d760afd27aff78a71d676296fc) | Immutable Hugging Face asset revision |
+| SRC-012 | S | [Tokenizer 12Hz official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-Tokenizer-12Hz.git) | `HEAD=d1d2fe2dbcbdc294f6962e5aa47ba394dc0cab07` by read-only `git ls-remote`; no stable commit permalink exposed |
+| SRC-013 | S | [1.7B CustomVoice official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-CustomVoice.git) | `HEAD=54dfa57e196341bfa4994c97ad1f0f874964eeab` by read-only `git ls-remote`; no stable commit permalink exposed |
+| SRC-014 | S | [1.7B VoiceDesign official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-VoiceDesign.git) | `HEAD=8dd530dbed7fda907a15ac48d7f78742cc90a065` by read-only `git ls-remote`; no stable commit permalink exposed |
+| SRC-015 | S | [1.7B Base official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-1.7B-Base.git) | `HEAD=dfb4a462f62f8f831ff0ffabf31189fc9d4344fd` by read-only `git ls-remote`; no stable commit permalink exposed |
+| SRC-016 | S | [0.6B CustomVoice official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice.git) | `HEAD=70b274883e68023af521a9199603192d58ccdd3f` by read-only `git ls-remote`; no stable commit permalink exposed |
+| SRC-017 | S | [0.6B Base official ModelScope Git remote](https://www.modelscope.cn/Qwen/Qwen3-TTS-12Hz-0.6B-Base.git) | `HEAD=fda1995a3162ad0488393cc366b82ca59c91c08e` by read-only `git ls-remote`; no stable commit permalink exposed |
 
-所有架构事实优先回指固定源码树或 versioned official report；移动 collection 只用于发布清单交叉核对。搜索结果、社区教程、讨论区与本任务调查 handoff 均未作为本报告的事实来源。[SRC-001][SRC-002][SRC-003][SRC-004][SRC-005]
+所有架构事实优先回指固定源码树或 versioned official report；移动 collection 只用于发布清单交叉核对，逐资产 SHA 则回指 immutable Hugging Face commit URL 或经只读 `git ls-remote` 验证的 ModelScope official remote。搜索结果、社区教程、讨论区与本任务调查 handoff 均未作为本报告的事实来源。[SRC-001][SRC-002][SRC-003][SRC-004][SRC-005][SRC-006][SRC-007][SRC-008][SRC-009][SRC-010][SRC-011][SRC-012][SRC-013][SRC-014][SRC-015][SRC-016][SRC-017]
