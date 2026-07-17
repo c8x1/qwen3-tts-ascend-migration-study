@@ -4,7 +4,7 @@
 
 **Goal:** 建立四个固定源码快照的可复现元数据索引，并在既有静态站模板上发布一组从 PyTorch 单卡基础出发、证据可追溯的 Qwen3-TTS 官方目标侧多页源码走读。
 
-**Architecture:** 一个只依赖 Python 标准库的索引器从显式 `--source-root` 读取只读目录，以注册表中的 snapshot/revision/acquisition metadata 校验身份，输出不含绝对路径或源码正文的稳定 JSON。另一个标准库生成器把结构化页面内容、证据记录、覆盖矩阵和这些索引渲染为复用现有 `site/index.html`、`site/assets/{theme.css,layout.css,app.js}` 交互契约的多页静态站；Python 验证器和 Playwright 共同守住可追溯、无遗漏、离线、导航、搜索、ARIA 与响应式边界。
+**Architecture:** 一个只依赖 Python 标准库的索引器从显式 `--source-root` 读取只读目录；acquisition handoff/registry 提供并固定 Git/archive identity，索引器只校验调用方声明并计算物化内容 digest，不把 digest 冒充 Git identity。另一个标准库生成器把结构化页面内容、证据记录、覆盖矩阵和这些索引渲染为复用现有 `site/index.html`、`site/assets/{theme.css,layout.css,app.js}` 交互契约的多页静态站；站点通过本地 HTTP 提供，浏览器断网后不发出外部请求，Python 验证器和 Playwright 共同守住可追溯、无遗漏、导航、搜索、ARIA 与响应式边界。
 
 **Tech Stack:** Python 3.11+ 标准库（`argparse`、`ast`、`csv`、`hashlib`、`html`、`json`、`pathlib`、`tomllib`、`unittest`、`html.parser`）、HTML5、CSS3、原生 ES modules、Node.js 24、Playwright 1.61.1、axe-core Playwright 4.12.1。
 
@@ -17,7 +17,7 @@
 - 本阶段不使用 GitNexus：它要求 Git repository，并会写 `.gitnexus`/context 文件；两个入选快照是 archive，四个输入又都必须只读。以后若确有图谱价值，只能在一次性、可删除、真实 Git index workspace 中另行评估。
 - 测试只读取 `tests/fixtures/source-index/` 小型 fixture，不读取 ignored source checkouts；真实四树 generation 是独立、可跳过的本地命令，机器没有 checkout 时不阻断 fixture 单元测试。
 - 追踪的 index 不得含绝对本地路径、`source_root`、源码正文或无限长 quote；每个输出记录 snapshot id、完整 revision、content identity、每文件 SHA-256 和全索引 digest。
-- 站点继续使用现有暖纸张三栏 shell、侧栏状态机、抽屉、复制与视觉令牌，不重新设计；所有运行时 CSS/JavaScript/搜索数据都在本地，关键正文在初始 HTML 中，禁用 JavaScript 仍可阅读。
+- 站点继续使用现有暖纸张三栏 shell、侧栏状态机、抽屉、复制与视觉令牌，不重新设计；offline 的操作定义是“由 `http://127.0.0.1` 本地 HTTP server 提供生成站点，然后浏览器 `context.setOffline(true)`”，所有运行时 CSS/JavaScript/搜索数据都在站内，断网时无外部请求；不承诺 `file://` JavaScript 行为，禁用 JavaScript 时仍有正文和静态目录链接。
 - 学习起点是 PyTorch 单卡；本阶段只解释官方 target 静态源码，不声称一次 CUDA 或 NPU 训练已运行。
 - 环境始终保留两条 lane：项目原生学习 lane 为 PyTorch/torch-npu `2.7.1` + CANN `8.5.0`；用户目标验证 lane 为 PyTorch/torch-npu `2.7.1` + CANN `8.5.2`，兼容性状态必须写 `unknown / 待真机验证`。
 - 重要结论必须标注 `verified`（已证实）、`project_claim`（项目声明）、`inference`（分析推断）或 `pending_hardware`（待真机验证）；颜色不是唯一信号。
@@ -79,6 +79,7 @@
 | `tests/site/template-visual.spec.js-snapshots/*.png` | 更新后的首页 desktop/laptop/mobile 基线 |
 | `tests/site/phase2-navigation-search.spec.js` | 多页相邻导航、文件/符号 index、local search 与 offline link regression |
 | `tests/site/phase2-responsive-accessibility.spec.js` | 代表性长页在 1440/1024/390、200% reflow、无脚本和 axe 的回归 |
+| `IMPLEMENTATION_NOTES.md` | Task 3 记录 acquisition/index identity 限制；Task 8 记录 Phase 2 完成范围、实现偏差与 deferred work |
 
 ### Task 1: 固化四快照 identity 与 source-index schema
 
@@ -89,8 +90,8 @@
 - Create: `tests/test_phase2_contracts.py`
 
 **Interfaces:**
-- Consumes: four acquisition handoffs and the actual read-only trees verified in Task 7.
-- Produces: `load_snapshot_registry(path: Path) -> dict[str, Snapshot]`, `validate_snapshot_registry(data: object) -> list[str]`, `validate_source_index(data: object, registry: dict[str, Snapshot]) -> list[str]`; immutable `Snapshot(snapshot_id, project, role, revision, acquisition_kind, content_id, materialized_file_count, blob_url_template)`.
+- Consumes: four Phase 1 acquisition handoffs and the already inspected read-only trees.
+- Produces: `load_snapshot_registry(path: Path) -> dict[str, Snapshot]`, `validate_snapshot_registry(data: object) -> list[str]`, `validate_source_index(data: object, registry: dict[str, Snapshot]) -> list[str]`; immutable `Snapshot(snapshot_id, project, role, revision, acquisition_kind, content_id, materialized_file_count, blob_url_template, excluded_paths, gitlinks)`.
 
 - [ ] **Step 1: 写入失败的 registry contract tests**
 
@@ -114,6 +115,11 @@ class SnapshotRegistryTest(unittest.TestCase):
         self.assertEqual(snapshots["mindspeed-llm-434baff7"].acquisition_kind, "codeload-archive")
         self.assertEqual(snapshots["moss-tts-ad99ec5f"].acquisition_kind, "git-sparse-checkout")
         self.assertEqual(sum(item.materialized_file_count for item in snapshots.values()), 3270)
+        self.assertEqual(snapshots["qwen3-tts-022e286b"].excluded_paths,
+                         (".github/.DS_Store", "assets/Qwen3_TTS.pdf"))
+        self.assertEqual(len(snapshots["moss-tts-ad99ec5f"].excluded_paths), 18)
+        self.assertEqual(snapshots["moss-tts-ad99ec5f"].gitlinks,
+                         ({"path": "moss_audio_tokenizer", "revision": "56776e867cb38446fa4bc00d0aceccab5001b008", "initialized": False},))
 
     def test_registry_rejects_local_paths_and_git_claim_for_archives(self):
         data = json.loads((ROOT / "research/source-snapshots.json").read_text())
@@ -148,7 +154,8 @@ Create `research/source-snapshots.json` exactly with schema version `1` and thes
       "materialized_file_count": 35,
       "source_url": "https://github.com/QwenLM/Qwen3-TTS",
       "blob_url_template": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/{path}#L{start}-L{end}",
-      "excluded": {"count": 2, "reason": "sparse source-only checkout excludes rendered paper and macOS metadata"}
+      "excluded": {"paths": [".github/.DS_Store", "assets/Qwen3_TTS.pdf"], "reason": "sparse source-only checkout excludes rendered paper and macOS metadata"},
+      "gitlinks": []
     },
     {
       "snapshot_id": "mindspeed-mm-0edd553e",
@@ -160,7 +167,8 @@ Create `research/source-snapshots.json` exactly with schema version `1` and thes
       "materialized_file_count": 1405,
       "source_url": "https://gitcode.com/Ascend/MindSpeed-MM",
       "blob_url_template": "https://github.com/Ascend/MindSpeed-MM/blob/0edd553e0ac9c912fe422c42cc9f42db9255ddcf/{path}#L{start}-L{end}",
-      "excluded": {"count": 0, "reason": "exact-SHA codeload tree; no Git metadata retained"}
+      "excluded": {"paths": [], "reason": "exact-SHA codeload tree; no Git metadata retained"},
+      "gitlinks": []
     },
     {
       "snapshot_id": "mindspeed-llm-434baff7",
@@ -172,7 +180,8 @@ Create `research/source-snapshots.json` exactly with schema version `1` and thes
       "materialized_file_count": 1664,
       "source_url": "https://gitcode.com/Ascend/MindSpeed-LLM",
       "blob_url_template": "https://github.com/Ascend/MindSpeed-LLM/blob/434baff794bd5594ebc9ed8a5b399110da9a44f0/{path}#L{start}-L{end}",
-      "excluded": {"count": 0, "reason": "tree-hash-verified exact-SHA codeload tree; no Git metadata retained"}
+      "excluded": {"paths": [], "reason": "tree-hash-verified exact-SHA codeload tree; no Git metadata retained"},
+      "gitlinks": []
     },
     {
       "snapshot_id": "moss-tts-ad99ec5f",
@@ -184,7 +193,19 @@ Create `research/source-snapshots.json` exactly with schema version `1` and thes
       "materialized_file_count": 166,
       "source_url": "https://github.com/OpenMOSS/MOSS-TTS",
       "blob_url_template": "https://github.com/OpenMOSS/MOSS-TTS/blob/ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af/{path}#L{start}-L{end}",
-      "excluded": {"count": 18, "reason": "source-only sparse checkout excludes committed wav/mp3/m4a/jsonl assets; tokenizer submodule remains uninitialized"}
+      "excluded": {
+        "paths": [
+          "assets/audio/reference_02_s1.wav", "assets/audio/reference_02_s2.wav", "assets/audio/reference_en.m4a",
+          "assets/audio/reference_en_0.mp3", "assets/audio/reference_en_1.mp3", "assets/audio/reference_en_2.mp3",
+          "assets/audio/reference_en_3.mp3", "assets/audio/reference_zh.wav", "assets/audio/reference_zh_0.wav",
+          "assets/audio/reference_zh_1.wav", "assets/audio/reference_zh_2.wav", "assets/audio/reference_zh_3.mp3",
+          "assets/text/moss_tts_example_texts.jsonl", "assets/text/moss_voice_generator_example_texts.jsonl",
+          "moss_tts_realtime/audio/prompt_audio.mp3", "moss_tts_realtime/audio/prompt_audio1.mp3",
+          "moss_tts_realtime/audio/user1.wav", "moss_tts_realtime/audio/user2.wav"
+        ],
+        "reason": "source-only sparse checkout excludes committed wav/mp3/m4a/jsonl assets"
+      },
+      "gitlinks": [{"path": "moss_audio_tokenizer", "revision": "56776e867cb38446fa4bc00d0aceccab5001b008", "initialized": false}]
     }
   ]
 }
@@ -192,7 +213,7 @@ Create `research/source-snapshots.json` exactly with schema version `1` and thes
 
 - [ ] **Step 4: 写入允许字段严格的 JSON schema**
 
-Create `research/schemas/source-index.schema.json` with `additionalProperties: false` at root, snapshot, file, symbol and config levels. The root required fields are `schema_version`, `snapshot`, `indexer_version`, `files`, `symbols`, `configs`, `content_digest`; file fields are `path`, `bytes`, `sha256`, `kind`; symbol fields are `id`, `path`, `qualname`, `name`, `kind`, `line`, `end_line`; config fields are `id`, `path`, `key`, `owner`, `kind`, `line`. Do not define `source_root`, `body`, `source`, `text`, or `generated_at`.
+Create `research/schemas/source-index.schema.json` with `additionalProperties: false` at root, snapshot, file, symbol and config levels. The root required fields are `schema_version`, `snapshot`, `indexer_version`, `files`, `symbols`, `configs`, `content_digest`; file fields are `path`, `bytes`, `sha256`, `kind`, `line_count`; symbol fields are `id`, `path`, `qualname`, `name`, `kind`, `line`, `end_line`; config fields are `id`, `path`, `key`, `owner`, `kind`, `line`. `line_count` is an integer `>=0` for all text-like kinds and `null` for binary. Do not define `source_root`, `body`, `source`, `text`, or `generated_at`.
 
 ```json
 {
@@ -210,8 +231,8 @@ Create `research/schemas/source-index.schema.json` with `additionalProperties: f
       "acquisition_kind": {"enum": ["git-sparse-checkout", "codeload-archive"]}, "content_id": {"type": "string"}
     }},
     "indexer_version": {"const": "1.0"},
-    "files": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["path", "bytes", "sha256", "kind"], "properties": {
-      "path": {"type": "string"}, "bytes": {"type": "integer", "minimum": 0}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "kind": {"enum": ["python", "json", "toml", "yaml", "text", "binary"]}
+    "files": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["path", "bytes", "sha256", "kind", "line_count"], "properties": {
+      "path": {"type": "string"}, "bytes": {"type": "integer", "minimum": 0}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "kind": {"enum": ["python", "json", "toml", "yaml", "text", "binary"]}, "line_count": {"type": ["integer", "null"], "minimum": 0}
     }}},
     "symbols": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "path", "qualname", "name", "kind", "line", "end_line"], "properties": {
       "id": {"type": "string"}, "path": {"type": "string"}, "qualname": {"type": "string"}, "name": {"type": "string"}, "kind": {"enum": ["class", "function", "async_function", "method", "async_method"]}, "line": {"type": "integer", "minimum": 1}, "end_line": {"type": "integer", "minimum": 1}
@@ -226,14 +247,16 @@ Create `research/schemas/source-index.schema.json` with `additionalProperties: f
 
 - [ ] **Step 5: 实现 registry/index contract validation**
 
-Create `scripts/phase2_contracts.py` with the exact public types and checks below; use a recursive allowed-key map for the complete schema and reject any absolute POSIX/Windows path in every emitted string.
+Create `scripts/phase2_contracts.py` with the public types below. The implementation must recursively validate the same allowed/required/type/enum/const/pattern/minimum constraints encoded in `source-index.schema.json`; the schema is loaded and used by `validate_source_index`, not merely committed as documentation. Validation is total over JSON values: a malformed root, nested snapshot, list container, or row produces stable path-prefixed errors and never raises `AttributeError`, `KeyError`, `TypeError`, or a sort exception. After structural validation succeeds, apply semantic checks for `line <= end_line`, text/binary `line_count`, unique IDs, declared registry identity, deterministic sort order, materialized-content digest, and both POSIX and Windows absolute paths.
 
 ```python
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 ACQUISITION = {
@@ -242,7 +265,6 @@ ACQUISITION = {
     "mindspeed-llm-434baff7": "codeload-archive",
     "moss-tts-ad99ec5f": "git-sparse-checkout",
 }
-ROOT_KEYS = {"schema_version", "snapshot", "indexer_version", "files", "symbols", "configs", "content_digest"}
 FORBIDDEN_KEYS = {"source_root", "body", "source", "text", "generated_at", "local_path"}
 
 
@@ -256,21 +278,114 @@ class Snapshot:
     content_id: str
     materialized_file_count: int
     blob_url_template: str
+    excluded_paths: tuple[str, ...]
+    gitlinks: tuple[dict[str, object], ...]
+
+
+def _is_absolute(value: str) -> bool:
+    return value.startswith(("/", "\\\\")) or bool(re.match(r"^[A-Za-z]:[\\/]", value))
+
+
+def _validate(node: object, schema: dict[str, object], path: str, errors: list[str]) -> None:
+    """Recursive subset of Draft 2020-12 used by source-index.schema.json.
+
+    Check type before any container operation; then additionalProperties,
+    required, properties/items, enum/const/pattern/minimum in that order so
+    malformed inputs always produce stable messages.
+    """
+    if "oneOf" in schema:
+        base_schema = {key: value for key, value in schema.items() if key != "oneOf"}
+        _validate(node, base_schema, path, errors)
+        branch_results = []
+        for branch in schema["oneOf"]:
+            branch_errors: list[str] = []
+            _validate(node, branch, path, branch_errors)
+            branch_results.append(branch_errors)
+        if sum(not branch for branch in branch_results) != 1:
+            errors.append(f"{path}: expected exactly one oneOf branch")
+        return
+    expected = schema.get("type")
+    allowed = expected if isinstance(expected, list) else [expected] if expected else []
+    matches = any(
+        (kind == "object" and isinstance(node, dict)) or
+        (kind == "array" and isinstance(node, list)) or
+        (kind == "string" and isinstance(node, str)) or
+        (kind == "integer" and isinstance(node, int) and not isinstance(node, bool)) or
+        (kind == "null" and node is None)
+        for kind in allowed
+    )
+    if allowed and not matches:
+        errors.append(f"{path}: expected {' or '.join(allowed)}")
+        return
+    if "const" in schema and node != schema["const"]:
+        errors.append(f"{path}: expected {schema['const']}")
+    if "enum" in schema and node not in schema["enum"]:
+        errors.append(f"{path}: expected one of {schema['enum']}")
+    if isinstance(node, str) and schema.get("pattern") and not re.fullmatch(str(schema["pattern"]), node):
+        errors.append(f"{path}: pattern mismatch")
+    if isinstance(node, str) and "minLength" in schema and len(node) < schema["minLength"]:
+        errors.append(f"{path}: shorter than {schema['minLength']}")
+    if isinstance(node, str) and "maxLength" in schema and len(node) > schema["maxLength"]:
+        errors.append(f"{path}: longer than {schema['maxLength']}")
+    if isinstance(node, int) and not isinstance(node, bool) and "minimum" in schema and node < schema["minimum"]:
+        errors.append(f"{path}: below minimum {schema['minimum']}")
+    if isinstance(node, dict):
+        properties = schema.get("properties", {})
+        for key in sorted(set(schema.get("required", [])) - set(node)):
+            errors.append(f"{path}: missing field {key}")
+        if schema.get("additionalProperties") is False:
+            for key in sorted(set(node) - set(properties)):
+                errors.append(f"{path}: unknown field {key}")
+        for key in sorted(set(node) & set(properties)):
+            _validate(node[key], properties[key], f"{path}.{key}", errors)
+    if isinstance(node, list) and "items" in schema:
+        if "minItems" in schema and len(node) < schema["minItems"]:
+            errors.append(f"{path}: fewer than {schema['minItems']} items")
+        if schema.get("uniqueItems") and len({json.dumps(item, sort_keys=True) for item in node}) != len(node):
+            errors.append(f"{path}: duplicate item")
+        for index, item in enumerate(node):
+            _validate(item, schema["items"], f"{path}[{index}]", errors)
 
 
 def validate_snapshot_registry(data: object) -> list[str]:
     errors: list[str] = []
-    if not isinstance(data, dict) or data.get("schema_version") != 1:
-        return ["registry.schema_version: expected 1"]
-    for index, item in enumerate(data.get("snapshots", [])):
-        for key in item:
-            if key not in {"snapshot_id", "project", "role", "revision", "acquisition_kind", "content_id", "materialized_file_count", "source_url", "blob_url_template", "excluded"}:
-                errors.append(f"snapshots[{index}]: unknown field {key}")
-        expected = ACQUISITION.get(item.get("snapshot_id"))
+    if not isinstance(data, dict):
+        return ["registry: expected object"]
+    if data.get("schema_version") != 1:
+        errors.append("registry.schema_version: expected 1")
+    rows = data.get("snapshots")
+    if not isinstance(rows, list):
+        errors.append("registry.snapshots: expected array")
+        return errors
+    required = {"snapshot_id", "project", "role", "revision", "acquisition_kind", "content_id", "materialized_file_count", "source_url", "blob_url_template", "excluded", "gitlinks"}
+    seen: set[str] = set()
+    for index, item in enumerate(rows):
+        prefix = f"snapshots[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{prefix}: expected object")
+            continue
+        for key in sorted(required - set(item)):
+            errors.append(f"{prefix}: missing field {key}")
+        for key in sorted(set(item) - required):
+            errors.append(f"{prefix}: unknown field {key}")
+        snapshot_id = item.get("snapshot_id")
+        if not isinstance(snapshot_id, str):
+            errors.append(f"{prefix}.snapshot_id: expected string")
+        elif snapshot_id in seen:
+            errors.append(f"{prefix}.snapshot_id: duplicate {snapshot_id}")
+        else:
+            seen.add(snapshot_id)
+        expected = ACQUISITION.get(snapshot_id)
         if expected and item.get("acquisition_kind") != expected:
-            errors.append(f"snapshots[{index}].acquisition_kind: expected {expected}")
-        if not re.fullmatch(r"[0-9a-f]{40}", str(item.get("revision", ""))):
-            errors.append(f"snapshots[{index}].revision: expected 40 lowercase hex")
+            errors.append(f"{prefix}.acquisition_kind: expected {expected}")
+        if not isinstance(item.get("revision"), str) or not re.fullmatch(r"[0-9a-f]{40}", item["revision"]):
+            errors.append(f"{prefix}.revision: expected 40 lowercase hex")
+        excluded = item.get("excluded")
+        if not isinstance(excluded, dict) or set(excluded) != {"paths", "reason"} or not isinstance(excluded.get("paths"), list) or not all(isinstance(path, str) for path in excluded.get("paths", [])) or not isinstance(excluded.get("reason"), str):
+            errors.append(f"{prefix}.excluded: expected paths/reason object")
+        gitlinks = item.get("gitlinks")
+        if not isinstance(gitlinks, list) or not all(isinstance(link, dict) and set(link) == {"path", "revision", "initialized"} and isinstance(link["path"], str) and isinstance(link["revision"], str) and bool(re.fullmatch(r"[0-9a-f]{40}", link["revision"])) and isinstance(link["initialized"], bool) for link in gitlinks):
+            errors.append(f"{prefix}.gitlinks: expected path/revision/initialized records")
     return errors
 
 
@@ -279,39 +394,157 @@ def load_snapshot_registry(path: Path) -> dict[str, Snapshot]:
     errors = validate_snapshot_registry(data)
     if errors:
         raise ValueError("\n".join(errors))
-    return {item["snapshot_id"]: Snapshot(**{key: item[key] for key in Snapshot.__dataclass_fields__}) for item in data["snapshots"]}
+    result: dict[str, Snapshot] = {}
+    for item in data["snapshots"]:
+        result[item["snapshot_id"]] = Snapshot(
+            snapshot_id=item["snapshot_id"], project=item["project"], role=item["role"],
+            revision=item["revision"], acquisition_kind=item["acquisition_kind"],
+            content_id=item["content_id"], materialized_file_count=item["materialized_file_count"],
+            blob_url_template=item["blob_url_template"], excluded_paths=tuple(item["excluded"]["paths"]),
+            gitlinks=tuple(item["gitlinks"]),
+        )
+    return result
+
+
+@lru_cache(maxsize=1)
+def load_source_index_schema() -> dict[str, object]:
+    root = Path(__file__).resolve().parents[1]
+    return json.loads((root / "research/schemas/source-index.schema.json").read_text(encoding="utf-8"))
+
+
+def _walk(node: object, path: str = "index"):
+    if isinstance(node, dict):
+        for key in sorted(node):
+            yield f"{path}.{key}", key, node[key]
+            yield from _walk(node[key], f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _walk(value, f"{path}[{index}]")
+
+
+def _materialized_digest(data: dict[str, object]) -> str:
+    payload = {key: value for key, value in data.items() if key != "content_digest"}
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def validate_source_index(data: object, registry: dict[str, Snapshot]) -> list[str]:
     errors: list[str] = []
-    if not isinstance(data, dict):
-        return ["index: expected object"]
-    for key in data:
-        if key not in ROOT_KEYS:
-            errors.append(f"index: unknown field {key}")
-    if FORBIDDEN_KEYS.intersection(data):
-        errors.append("index: forbidden source-body or local-path field")
-    snapshot_id = data.get("snapshot", {}).get("snapshot_id")
-    if snapshot_id not in registry:
-        errors.append(f"snapshot.snapshot_id: unknown {snapshot_id}")
-    for row_name in ("files", "symbols", "configs"):
-        rows = data.get(row_name, [])
-        if rows != sorted(rows, key=lambda row: row["id"] if "id" in row else row["path"]):
-            errors.append(f"{row_name}: not deterministically sorted")
-        for row in rows:
-            for key, value in row.items():
-                if key in FORBIDDEN_KEYS:
-                    errors.append(f"{row_name}.{key}: forbidden")
-                if isinstance(value, str) and (value.startswith("/") or re.match(r"^[A-Za-z]:[\\/]", value)):
-                    errors.append(f"{row_name}.{key}: absolute path forbidden")
+    _validate(data, load_source_index_schema(), "index", errors)
+    if errors:
+        return errors
+    assert isinstance(data, dict)
+    snapshot_data = data["snapshot"]
+    snapshot_id = snapshot_data["snapshot_id"]
+    snapshot = registry.get(snapshot_id)
+    if snapshot is None:
+        errors.append(f"index.snapshot.snapshot_id: unknown {snapshot_id}")
+    else:
+        for key in ("snapshot_id", "project", "role", "revision", "acquisition_kind", "content_id"):
+            if snapshot_data[key] != getattr(snapshot, key):
+                errors.append(f"index.snapshot.{key}: registry mismatch")
+    for value_path, key, value in _walk(data):
+        if key in FORBIDDEN_KEYS:
+            errors.append(f"{value_path}: forbidden field")
+        if isinstance(value, str) and _is_absolute(value):
+            errors.append(f"{value_path}: absolute path forbidden")
+    files = data["files"]
+    symbols = data["symbols"]
+    configs = data["configs"]
+    if files != sorted(files, key=lambda row: row["path"]):
+        errors.append("index.files: not deterministically sorted")
+    if symbols != sorted(symbols, key=lambda row: row["id"]):
+        errors.append("index.symbols: not deterministically sorted")
+    if configs != sorted(configs, key=lambda row: row["id"]):
+        errors.append("index.configs: not deterministically sorted")
+    file_map = {row["path"]: row for row in files}
+    if len(file_map) != len(files):
+        errors.append("index.files: duplicate path")
+    for index, row in enumerate(files):
+        expected_null = row["kind"] == "binary"
+        if expected_null != (row["line_count"] is None):
+            errors.append(f"index.files[{index}].line_count: binary must be null and text must be integer")
+    for row_name, rows in (("symbols", symbols), ("configs", configs)):
+        ids = [row["id"] for row in rows]
+        if len(ids) != len(set(ids)):
+            errors.append(f"index.{row_name}: duplicate id")
+        for index, row in enumerate(rows):
+            owner_file = file_map.get(row["path"])
+            if owner_file is None:
+                errors.append(f"index.{row_name}[{index}].path: not in files")
+                continue
+            line_count = owner_file["line_count"]
+            if line_count is None or row["line"] > line_count:
+                errors.append(f"index.{row_name}[{index}].line: exceeds file line_count")
+    for index, row in enumerate(symbols):
+        if row["line"] > row["end_line"]:
+            errors.append(f"index.symbols[{index}]: line exceeds end_line")
+        elif row["end_line"] > file_map[row["path"]]["line_count"]:
+            errors.append(f"index.symbols[{index}].end_line: exceeds file line_count")
+        if row["id"] != f'{row["path"]}:{row["qualname"]}:{row["line"]}':
+            errors.append(f"index.symbols[{index}].id: expected path:qualname:line")
+    for index, row in enumerate(configs):
+        if row["id"] != f'{row["path"]}:{row["key"]}:{row["line"]}':
+            errors.append(f"index.configs[{index}].id: expected path:key:line")
+    if data["content_digest"] != _materialized_digest(data):
+        errors.append("index.content_digest: materialized content digest mismatch")
     return errors
 ```
+
+`load_snapshot_registry()` converts nested `excluded.paths` to `excluded_paths` and preserves `gitlinks`; `load_source_index_schema()` reads `research/schemas/source-index.schema.json` once with `functools.lru_cache`. Add the following malformed-container regression matrix to `tests/test_phase2_contracts.py`:
+
+```python
+def test_source_index_validator_is_recursive_and_total(self):
+    cases = [
+        ({"snapshot": []}, "index.snapshot: expected object"),
+        ({"snapshot": {"snapshot_id": "fixture", "extra": 1}}, "index.snapshot: unknown field extra"),
+        ({"snapshot": {"snapshot_id": "fixture"}}, "index.snapshot: missing field project"),
+        ({"files": {}}, "index.files: expected array"),
+        ({"files": [None]}, "index.files[0]: expected object"),
+        ({"symbols": [{"line": "1"}]}, "index.symbols[0].line: expected integer"),
+    ]
+    for mutation, expected in cases:
+        with self.subTest(expected=expected):
+            data = valid_minimal_index()
+            data.update(mutation)
+            self.assertIn(expected, validate_source_index(data, {"fixture": FIXTURE_SNAPSHOT}))
+
+def test_rejects_windows_and_posix_absolute_paths_and_reversed_range(self):
+    for bad in ["/tmp/x.py", r"C:\\src\\x.py", r"\\server\\share\\x.py"]:
+        data = valid_minimal_index(file_path=bad)
+        self.assertIn("absolute path forbidden", "\n".join(validate_source_index(data, {"fixture": FIXTURE_SNAPSHOT})))
+    data = valid_minimal_index(symbol_line=9, symbol_end_line=4)
+    self.assertIn("index.symbols[0]: line exceeds end_line", validate_source_index(data, {"fixture": FIXTURE_SNAPSHOT}))
+```
+
+Define `FIXTURE_SNAPSHOT` and `valid_minimal_index()` in the same test module so every mutation begins from a complete valid container and recomputes the materialized digest before validation:
+
+```python
+from scripts.phase2_contracts import Snapshot, _materialized_digest
+
+FIXTURE_SNAPSHOT = Snapshot("fixture", "Fixture/Source", "test", "a" * 40,
+    "codeload-archive", "fixture:1", 1, "https://example.invalid/{path}#L{start}-L{end}", (), ())
+
+def valid_minimal_index(file_path="x.py", symbol_line=1, symbol_end_line=1, snapshot=FIXTURE_SNAPSHOT):
+    data = {
+        "schema_version": 1,
+        "snapshot": {key: getattr(snapshot, key) for key in ("snapshot_id", "project", "role", "revision", "acquisition_kind", "content_id")},
+        "indexer_version": "1.0",
+        "files": [{"path": file_path, "bytes": 2, "sha256": "0" * 64, "kind": "python", "line_count": 10}],
+        "symbols": [{"id": f"{file_path}:f:{symbol_line}", "path": file_path, "qualname": "f", "name": "f", "kind": "function", "line": symbol_line, "end_line": symbol_end_line}],
+        "configs": [],
+    }
+    data["content_digest"] = _materialized_digest(data)
+    return data
+```
+
+When a test mutates any digest-covered field, call `refresh_materialized_digest(data)` before asserting the targeted semantic error; define that public test helper as `data["content_digest"] = _materialized_digest(data)`. Tests that target digest mismatch deliberately do not refresh it.
 
 - [ ] **Step 6: 运行 contract tests**
 
 Run: `python3 -m unittest tests.test_phase2_contracts -v`
 
-Expected: 2 tests pass.
+Expected: all registry/schema tests pass, including nested unknown/missing/type/malformed containers, stable errors, SHA/enum/range checks and absolute-path rejection.
 
 - [ ] **Step 7: 提交 snapshot contract**
 
@@ -358,7 +591,24 @@ class SampleConfig:
 
 
 def build(config: SampleConfig):
+    LOCAL_ONLY = 99
     return config.describe()
+
+
+class DuplicateNames:
+    @property
+    def value(self):
+        return 1
+
+    @value.setter
+    def value(self, new_value):
+        self.current = new_value
+
+    def overloaded(self, value: int):
+        return value
+
+    def overloaded(self, value: str):
+        return value
 ```
 
 ```json
@@ -397,7 +647,7 @@ from scripts.source_index import build_index, file_kind, write_canonical_json
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE = ROOT / "tests/fixtures/source-index/source"
-SNAPSHOT = Snapshot("fixture", "Fixture/Source", "test", "a" * 40, "codeload-archive", "fixture:1", 5, "https://example.invalid/{path}#L{start}-L{end}")
+SNAPSHOT = Snapshot("fixture", "Fixture/Source", "test", "a" * 40, "codeload-archive", "fixture:1", 5, "https://example.invalid/{path}#L{start}-L{end}", (), ())
 
 
 class SourceIndexTest(unittest.TestCase):
@@ -407,6 +657,13 @@ class SourceIndexTest(unittest.TestCase):
         self.assertEqual([row["qualname"] for row in data["symbols"]], ["SampleConfig", "SampleConfig.__init__", "SampleConfig.describe", "build"])
         keys = {row["key"] for row in data["configs"]}
         self.assertTrue({"DEFAULT_RATE", "SampleConfig.model_type", "SampleConfig.width", "model.name", "training.precision"}.issubset(keys))
+        self.assertNotIn("LOCAL_ONLY", keys)
+        symbol_ids = [row["id"] for row in data["symbols"]]
+        self.assertEqual(len(symbol_ids), len(set(symbol_ids)))
+        self.assertEqual(len([row for row in data["symbols"] if row["qualname"] == "DuplicateNames.value"]), 2)
+        self.assertEqual(len([row for row in data["symbols"] if row["qualname"] == "DuplicateNames.overloaded"]), 2)
+        self.assertTrue(all(row["id"] == f'{row["path"]}:{row["qualname"]}:{row["line"]}' for row in data["symbols"]))
+        self.assertTrue(all((row["kind"] == "binary") == (row["line_count"] is None) for row in data["files"]))
         self.assertEqual(validate_source_index(data, {"fixture": SNAPSHOT}), [])
 
     def test_same_tree_produces_identical_bytes(self):
@@ -435,6 +692,18 @@ class SourceIndexTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "symlink forbidden: escape.py"):
                 build_index(source, SNAPSHOT)
 
+    def test_rejects_source_root_symlink_and_output_inside_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            real = Path(tmp) / "real"
+            real.mkdir()
+            alias = Path(tmp) / "alias"
+            alias.symlink_to(real, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, "source root symlink forbidden"):
+                build_index(alias, SNAPSHOT)
+            result = run_cli(real, real / "index.json")
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("output must be outside source root", result.stderr)
+
     def test_extensionless_and_packaging_files_are_text_metadata(self):
         names = ["LICENSE", "Makefile", "Dockerfile", "MANIFEST.in", ".gitignore", "README"]
         self.assertEqual([file_kind(Path(name)) for name in names], ["text"] * len(names))
@@ -448,7 +717,7 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'scripts.source_index'
 
 - [ ] **Step 4: 实现文件发现、hash、AST 和 config-key extraction**
 
-Create `scripts/source_index.py`. It must never call Git, must prune only `.git`, `__pycache__`, `.pytest_cache`, `node_modules`, `playwright-report`, and `test-results`, and must index every other regular file as path/size/hash metadata. Python parsing emits classes, top-level functions and methods; config extraction emits names only, never scalar values.
+Create `scripts/source_index.py`. It must never call Git and does not validate Git/archive identity: revision/acquisition/content identity come from the acquisition handoff and registry; this library only checks the caller's registry declaration and creates a digest of materialized file metadata. It prunes only `.git`, `__pycache__`, `.pytest_cache`, `node_modules`, `playwright-report`, and `test-results`, and indexes every other regular file as path/size/hash/line-count metadata. Python parsing emits classes, top-level functions and every method occurrence; symbol IDs include definition line so repeated property setter/overload/redefinition qualnames remain unique. Config extraction emits names only, never scalar values: module/class assignments plus `self.attr` in class methods, never ordinary function-local names such as `LOCAL_ONLY`.
 
 ```python
 from __future__ import annotations
@@ -469,6 +738,8 @@ TEXT_NAMES = {"LICENSE", "Makefile", "Dockerfile", "README", ".gitignore", ".git
 
 
 def discover_files(source_root: Path) -> list[Path]:
+    if source_root.is_symlink():
+        raise ValueError("source root symlink forbidden")
     if not source_root.is_dir():
         raise ValueError(f"source root is not a directory: {source_root}")
     files = []
@@ -519,7 +790,7 @@ def symbol_rows(path: Path, relative: str) -> list[dict[str, object]]:
 
 
 def _symbol(path: str, qualname: str, name: str, kind: str, node: ast.AST) -> dict[str, object]:
-    return {"id": f"{path}:{qualname}", "path": path, "qualname": qualname, "name": name, "kind": kind, "line": node.lineno, "end_line": node.end_lineno}
+    return {"id": f"{path}:{qualname}:{node.lineno}", "path": path, "qualname": qualname, "name": name, "kind": kind, "line": node.lineno, "end_line": node.end_lineno}
 
 
 def config_rows(path: Path, relative: str) -> list[dict[str, object]]:
@@ -549,12 +820,25 @@ class ConfigVisitor(ast.NodeVisitor):
     def __init__(self, relative: str):
         self.relative = relative
         self.owners: list[str] = []
+        self.function_depth = 0
+        self.class_method_depth = 0
         self.rows: list[dict[str, object]] = []
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         self.owners.append(node.name)
         self.generic_visit(node)
         self.owners.pop()
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.function_depth += 1
+        if self.owners:
+            self.class_method_depth += 1
+        self.generic_visit(node)
+        if self.owners:
+            self.class_method_depth -= 1
+        self.function_depth -= 1
+
+    visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._record(node.targets, node.lineno)
@@ -568,9 +852,9 @@ class ConfigVisitor(ast.NodeVisitor):
         owner = ".".join(self.owners)
         for target in targets:
             name = None
-            if isinstance(target, ast.Name) and (target.id.isupper() or target.id in {"model_type", "sub_configs"}):
+            if isinstance(target, ast.Name) and self.function_depth == 0 and (target.id.isupper() or target.id in {"model_type", "sub_configs"}):
                 name = target.id
-            elif isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
+            elif self.class_method_depth and isinstance(target, ast.Attribute) and isinstance(target.value, ast.Name) and target.value.id == "self":
                 name = target.attr
             if name is None:
                 continue
@@ -606,7 +890,10 @@ def build_index(source_root: Path, snapshot: Snapshot) -> dict[str, object]:
     files, symbols, configs = [], [], []
     for path in discover_files(source_root):
         relative = path.relative_to(source_root).as_posix()
-        files.append({"path": relative, "bytes": path.stat().st_size, "sha256": sha256_file(path), "kind": file_kind(path)})
+        kind = file_kind(path)
+        raw = path.read_bytes()
+        line_count = None if kind == "binary" else len(raw.decode("utf-8", errors="replace").splitlines())
+        files.append({"path": relative, "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(), "kind": kind, "line_count": line_count})
         symbols.extend(symbol_rows(path, relative))
         configs.extend(config_rows(path, relative))
     payload = {
@@ -657,11 +944,15 @@ def main() -> int:
         parser.error(f"unknown snapshot id: {args.snapshot_id}")
     if args.revision != snapshot.revision:
         parser.error("revision does not match registry")
+    source_root = args.source_root.resolve(strict=True)
+    output = args.output.resolve(strict=False)
+    if output == source_root or source_root in output.parents:
+        parser.error("output must be outside source root")
     data = build_index(args.source_root, snapshot)
     errors = validate_source_index(data, registry)
     if errors:
         parser.error("; ".join(errors))
-    write_canonical_json(data, args.output)
+    write_canonical_json(data, output)
     print(f"wrote {args.output.as_posix()} snapshot={snapshot.snapshot_id} revision={snapshot.revision} files={len(data['files'])} digest={data['content_digest']}")
     return 0
 
@@ -679,7 +970,7 @@ python3 -m unittest tests.test_source_index -v
 python3 scripts/build_source_index.py --help
 ```
 
-Expected: 5 tests pass; help lists all four required flags; no `.superpowers/source-checkouts` path is opened by tests; the symlink test proves hashing cannot escape `--source-root`; extensionless packaging files are classified as text metadata.
+Expected: all source-index tests pass; help lists all four required flags; no `.superpowers/source-checkouts` path is opened by tests; source-root and descendant symlinks are rejected before hashing; resolved output containment is rejected before writing; extensionless packaging files are text metadata; duplicate qualnames have unique `path:qualname:line` IDs; `LOCAL_ONLY` is absent. The real-tree generation in Task 3 additionally asserts the known duplicate-qualname regression inventory: MindSpeed-MM has 10 duplicate `(path, qualname)` groups and MOSS-TTS has 1, while IDs remain unique.
 
 - [ ] **Step 7: 提交 indexer**
 
@@ -698,6 +989,7 @@ Expected: one commit; `git status --short` has no output.
 - Create: `research/indexes/mindspeed-mm-0edd553e.json`
 - Create: `research/indexes/mindspeed-llm-434baff7.json`
 - Create: `research/indexes/moss-tts-ad99ec5f.json`
+- Modify: `IMPLEMENTATION_NOTES.md`
 
 **Interfaces:**
 - Consumes: `build_source_index.py`, the four exact read-only roots, and the registry's expected file counts.
@@ -708,19 +1000,17 @@ Expected: one commit; `git status --short` has no output.
 Append these tests to `tests/test_phase2_contracts.py`:
 
 ```python
+import collections
+
 from scripts.phase2_contracts import validate_source_index
 
 
 class SourceIndexContractTest(unittest.TestCase):
     def test_index_rejects_absolute_path_and_body(self):
         registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
-        data = {
-            "schema_version": 1,
-            "snapshot": {"snapshot_id": "qwen3-tts-022e286b"},
-            "indexer_version": "1.0",
-            "files": [{"path": "/Users/me/source.py", "bytes": 1, "sha256": "0" * 64, "kind": "python", "body": "print(1)"}],
-            "symbols": [], "configs": [], "content_digest": "0" * 64,
-        }
+        data = valid_minimal_index(snapshot=registry["qwen3-tts-022e286b"])
+        data["files"][0]["path"] = "/Users/me/source.py"
+        data["files"][0]["body"] = "print(1)"
         errors = validate_source_index(data, registry)
         self.assertTrue(any("absolute path forbidden" in error for error in errors))
         self.assertTrue(any("forbidden" in error for error in errors))
@@ -732,6 +1022,14 @@ class SourceIndexContractTest(unittest.TestCase):
             self.assertEqual(data["snapshot"]["revision"], snapshot.revision)
             self.assertEqual(len(data["files"]), snapshot.materialized_file_count)
             self.assertEqual(validate_source_index(data, registry), [])
+
+    def test_real_indexes_keep_duplicate_qualnames_but_unique_line_ids(self):
+        expected_groups = {"mindspeed-mm-0edd553e": 10, "moss-tts-ad99ec5f": 1}
+        for snapshot_id, expected in expected_groups.items():
+            data = json.loads((ROOT / "research/indexes" / f"{snapshot_id}.json").read_text())
+            pairs = collections.Counter((row["path"], row["qualname"]) for row in data["symbols"])
+            self.assertEqual(sum(count > 1 for count in pairs.values()), expected)
+            self.assertEqual(len({row["id"] for row in data["symbols"]}), len(data["symbols"]))
 ```
 
 - [ ] **Step 2: 运行 contract tests 并确认 indexes 缺失**
@@ -830,7 +1128,7 @@ cmp research/indexes/moss-tts-ad99ec5f.json "$tmpdir/moss-tts-ad99ec5f.json"
 rm -rf "$tmpdir"
 ```
 
-Expected: validator prints exactly `validated 4 source indexes: 3270 files; no absolute paths or source bodies`; all four `cmp` commands are silent and exit 0. On a machine without checkouts, skip only this reproduction block; fixture tests and validation of already committed outputs still run.
+Expected: validator prints exactly `validated 4 source indexes: 3270 files; no absolute paths or source bodies`; all four `cmp` commands are silent and exit 0. On a machine without checkouts, skip only this reproduction block; fixture tests and validation of already committed outputs still run. The contract test also confirms the observed duplicate-qualname groups are exactly MM 10 and MOSS 1 while all line-bearing IDs are unique.
 
 - [ ] **Step 6: 审计公开追踪边界**
 
@@ -844,14 +1142,18 @@ rg -n '/Users/|[A-Za-z]:\\\\' research/indexes
 
 Expected: all three audits have no output; no source tree, asset, full source body, or absolute local path is tracked.
 
-- [ ] **Step 7: 运行 Python suite 并提交 indexes**
+- [ ] **Step 7: 记录 acquisition/index identity boundary**
+
+Append a dated `Phase 2 source-index foundation` entry to `IMPLEMENTATION_NOTES.md`: list all four snapshot IDs/acquisition kinds; preserve the Qwen two exact exclusions, MOSS 18 exact excluded paths and uninitialized `moss_audio_tokenizer@56776e867cb38446fa4bc00d0aceccab5001b008`; state that Git/archive identity is inherited from acquisition handoffs and not proved by the indexer, while `content_digest` covers only deterministic materialized index content. Record that both MindSpeed inputs are codeload archives and the observed duplicate-qualname counts are MM 10/MOSS 1.
+
+- [ ] **Step 8: 运行 Python suite 并提交 indexes**
 
 Run: `python3 -m unittest discover -s tests -p 'test_*.py' -v`
 
 Expected: the existing 15 research tests plus 9 Phase 2/index tests pass (24 total).
 
 ```bash
-git add scripts/validate_phase2.py tests/test_phase2_contracts.py research/indexes
+git add scripts/validate_phase2.py tests/test_phase2_contracts.py research/indexes IMPLEMENTATION_NOTES.md
 git commit -m "data: add reproducible selected source indexes"
 ```
 
@@ -862,19 +1164,23 @@ Expected: one commit containing only validator/test/index outputs; no ignored tr
 **Files:**
 - Create: `research/target-evidence.json`
 - Create: `research/target-coverage.csv`
+- Create: `research/schemas/target-evidence.schema.json`
+- Create: `tests/fixtures/evidence/qwen3-tts-excerpts.json`
 - Modify: `tests/test_phase2_contracts.py`
 - Modify: `scripts/phase2_contracts.py`
 - Modify: `scripts/validate_phase2.py`
 
 **Interfaces:**
-- Consumes: target source index `qwen3-tts-022e286b.json`, fixed target blob URL template, official baseline and approved selection proposal.
-- Produces: `load_evidence(path: Path) -> dict[str, Evidence]`, `validate_evidence(data: object, registry) -> list[str]`, `validate_target_coverage(index, rows, page_catalog=None) -> list[str]`; exactly one coverage row for each of 35 materialized target files.
+- Consumes: target source index `qwen3-tts-022e286b.json`, fixed target blob URL template, `research/source-ledger.csv`, official baseline and approved selection proposal.
+- Produces: `load_evidence(path: Path) -> dict[str, Evidence]`, `validate_evidence(data: object, registry, target_index, ledger_ids) -> list[str]`, `validate_target_coverage(index, rows, evidence, page_catalog=None) -> list[str]`; exactly one coverage row for each of 35 materialized target files.
 
 - [ ] **Step 1: 写入 evidence/coverage failing tests**
 
 Append:
 
 ```python
+import csv
+
 from scripts.phase2_contracts import load_evidence, validate_target_coverage
 
 
@@ -888,6 +1194,22 @@ class TargetCoverageTest(unittest.TestCase):
         evidence = load_evidence(ROOT / "research/target-evidence.json")
         self.assertEqual({row.state for row in evidence.values()}, {"verified", "project_claim", "inference", "pending_hardware"})
         self.assertTrue(all(len(row.quote) <= 240 and row.quote.count("\n") < 8 for row in evidence.values()))
+
+    def test_evidence_ranges_exist_in_index_and_quotes_match_fixed_lines(self):
+        target = json.loads((ROOT / "research/indexes/qwen3-tts-022e286b.json").read_text())
+        excerpts = json.loads((ROOT / "tests/fixtures/evidence/qwen3-tts-excerpts.json").read_text())
+        evidence = load_evidence(ROOT / "research/target-evidence.json")
+        for evidence_id, lines in excerpts.items():
+            row = evidence[evidence_id]
+            self.assertEqual(lines["path"], row.path)
+            self.assertEqual([lines["start_line"], lines["end_line"]], [row.start_line, row.end_line])
+            self.assertIn(row.quote, "\n".join(lines["lines"]))
+
+    def test_all_source_ids_exist_in_phase1_ledger(self):
+        ledger_ids = {row["source_id"] for row in csv.DictReader((ROOT / "research/source-ledger.csv").open())}
+        for row in load_evidence(ROOT / "research/target-evidence.json").values():
+            self.assertTrue(row.source_ids)
+            self.assertLessEqual(set(row.source_ids), ledger_ids)
 ```
 
 - [ ] **Step 2: 运行 tests 并确认 evidence/coverage 缺失**
@@ -898,34 +1220,104 @@ Expected: FAIL with `FileNotFoundError` for `research/target-coverage.csv` or `r
 
 - [ ] **Step 3: 写入 fixed target evidence records**
 
-Create `research/target-evidence.json` with `schema_version: 1`. Every record has `evidence_id`, `snapshot_id`, `path`, `start_line`, `end_line`, `state`, `claim`, and `quote`; `quote` may be empty but never exceeds 240 characters. Use exactly these grounded records:
+Create `research/schemas/target-evidence.schema.json` and use it from the validator. Root keys are exactly `schema_version` and `records`; each record keys are exactly `evidence_id`, `snapshot_id`, `path`, `start_line`, `end_line`, `state`, `claim`, `quote`, `source_ids`. Require non-empty unique `source_ids` matching `^SRC-[0-9]{3}$`, four-state enum, claim length 1..500 and quote length <=240. Use `oneOf`: text-range records require string `snapshot_id/path` plus integer `start_line/end_line`; file-only records require string `snapshot_id/path` and null lines; ledger-only records require all four fields to be `null`. Create `research/target-evidence.json` with the following records; every text range must exist in the target index and satisfy `end_line <= file.line_count`, while file-only evidence is allowed only for an indexed binary and renders without a line anchor.
 
-| Evidence ID | Path and fixed lines | State | Claim used by pages |
-| --- | --- | --- | --- |
-| `TGT-SCOPE-001` | `finetuning/README.md:3-10` | `verified` | public recipe is 12Hz Base single-speaker SFT; advanced/multi-speaker work is not public here |
-| `TGT-SCOPE-002` | `README.md:1-220` | `project_claim` | released family, quality and latency statements remain project claims |
-| `TGT-PKG-001` | `pyproject.toml:1-45` | `verified` | package metadata, Python floor and runtime dependencies |
-| `TGT-API-001` | `qwen_tts/inference/qwen3_tts_model.py:83-121` | `verified` | `from_pretrained` registers AutoConfig/AutoModel/AutoProcessor then loads model and processor |
-| `TGT-API-002` | `qwen_tts/inference/qwen3_tts_model.py:356-633` | `verified` | Base voice clone prompt and generation API |
-| `TGT-API-003` | `qwen_tts/inference/qwen3_tts_model.py:637-839` | `verified` | VoiceDesign and CustomVoice public wrapper APIs |
-| `TGT-CONFIG-001` | `qwen_tts/core/models/configuration_qwen3_tts.py:22-499` | `verified` | speaker, code predictor, Talker and composite config nesting |
-| `TGT-MODEL-001` | `qwen_tts/core/models/modeling_qwen3_tts.py:311-393` | `verified` | ECAPA-style speaker encoder produces the speaker embedding |
-| `TGT-MODEL-002` | `qwen_tts/core/models/modeling_qwen3_tts.py:1427-1810` | `verified` | Talker backbone, codec-0 LM head and residual code predictor integration |
-| `TGT-MODEL-003` | `qwen_tts/core/models/modeling_qwen3_tts.py:1813-2292` | `verified` | composite conditional generation and prompt/speaker injection flow |
-| `TGT-MODEL-004` | `qwen_tts/core/models/modeling_qwen3_tts.py:1612-1633` | `verified` | `forward_sub_talker_finetune` returns residual-codebook loss |
-| `TGT-TOK12-001` | `qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py:780-1024` | `verified` | split RVQ, 12Hz model encode/decode and causal/chunked decoder |
-| `TGT-TOK25-001` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:996-1526` | `verified` | 25Hz encoder, DiT mel decoder and BigVGAN waveform decoder source exists |
-| `TGT-TOK25-002` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:1397-1442` | `pending_hardware` | external 25Hz runtime assets are required and public executable coverage remains unknown |
-| `TGT-PROC-001` | `qwen_tts/core/models/processing_qwen3_tts.py:27-103` | `verified` | processor wraps Qwen tokenizer/ChatML text behavior |
-| `TGT-PROC-002` | `qwen_tts/inference/qwen3_tts_tokenizer.py:44-410` | `verified` | 12Hz/25Hz audio wrapper normalizes, encodes, decodes and exposes sample-rate contracts |
-| `TGT-DATA-001` | `finetuning/prepare_data.py:24-68` | `verified` | preprocessing materializes `audio_codes` into JSONL |
-| `TGT-DATA-002` | `finetuning/dataset.py:33-217` | `verified` | dataset makes ChatML text, 24kHz reference mel and dual-track collate tensors |
-| `TGT-TRAIN-001` | `finetuning/sft_12hz.py:31-125` | `verified` | Accelerate BF16, AdamW, main + 0.3 residual loss, backward, clip and step |
-| `TGT-EXPORT-001` | `finetuning/sft_12hz.py:126-158` | `verified` | per-epoch copy/config mutation, speaker row 3000 and safetensors export |
-| `TGT-GAP-001` | `finetuning/sft_12hz.py:31-158` | `inference` | absence of scheduler/resume/validation in this file is a fixed-tree audit inference, not proof of global absence |
-| `TGT-HW-001` | `pyproject.toml:1-45` | `pending_hardware` | no CANN/torch-npu dependency or CANN 8.5.2 compatibility evidence exists in the official target package |
+Use this exact schema shape (the shared validator explicitly supports every keyword present here):
 
-For the four non-empty quotes use only these short excerpts: `single-speaker fine-tuning`, `AutoModel.from_pretrained`, `main_loss + 0.3 * sub_talker_loss`, and `checkpoint-epoch-{epoch}`; all other `quote` values are empty. Generate each `url` at validation/render time from the registry template rather than duplicating it in this file.
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "records"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "records": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false,
+      "required": ["evidence_id", "snapshot_id", "path", "start_line", "end_line", "state", "claim", "quote", "source_ids"],
+      "properties": {
+        "evidence_id": {"type": "string", "pattern": "^[A-Z0-9-]+$"},
+        "snapshot_id": {"type": ["string", "null"]}, "path": {"type": ["string", "null"]},
+        "start_line": {"type": ["integer", "null"], "minimum": 1},
+        "end_line": {"type": ["integer", "null"], "minimum": 1},
+        "state": {"enum": ["verified", "project_claim", "inference", "pending_hardware"]},
+        "claim": {"type": "string", "minLength": 1, "maxLength": 500},
+        "quote": {"type": "string", "maxLength": 240},
+        "source_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^SRC-[0-9]{3}$"}}
+      },
+      "oneOf": [
+        {"properties": {"snapshot_id": {"type": "string"}, "path": {"type": "string"}, "start_line": {"type": "integer", "minimum": 1}, "end_line": {"type": "integer", "minimum": 1}}},
+        {"properties": {"snapshot_id": {"type": "string"}, "path": {"type": "string"}, "start_line": {"type": "null"}, "end_line": {"type": "null"}}},
+        {"properties": {"snapshot_id": {"type": "null"}, "path": {"type": "null"}, "start_line": {"type": "null"}, "end_line": {"type": "null"}}}
+      ]
+    }}
+  }
+}
+```
+
+Add schema regression cases for an empty/duplicate `source_ids`, overlong quote, mixed null/source range, and unknown nested field; each must return a stable validation error and not crash.
+
+| Evidence ID | Path and fixed lines | State | Source IDs | Claim used by pages |
+| --- | --- | --- | --- | --- |
+| `TGT-SCOPE-001` | `finetuning/README.md:3-10` | `verified` | `SRC-001` | public recipe is 12Hz Base single-speaker SFT; advanced/multi-speaker work is not public here |
+| `TGT-SCOPE-002` | ledger-only | `project_claim` | `SRC-001, SRC-003, SRC-004, SRC-005` | official report/collections describe the released family and claims; inventories do not prove a fixed public 25Hz checkpoint |
+| `TGT-PKG-001` | `pyproject.toml:1-45` | `verified` | `SRC-001` | package metadata, Python floor and runtime dependencies |
+| `TGT-PKG-002` | `qwen_tts/core/__init__.py:16-19` | `verified` | `SRC-001` | package exports both 12Hz and 25Hz tokenizer config/model classes |
+| `TGT-PKG-003` | `LICENSE:1-201` | `verified` | `SRC-001` | official target source root carries Apache License 2.0 text; weights/data remain separately scoped |
+| `TGT-PKG-004` | `MANIFEST.in:1-13` | `verified` | `SRC-001` | source distribution includes package data but explicitly prunes assets, examples and finetuning |
+| `TGT-API-001` | `qwen_tts/inference/qwen3_tts_model.py:83-121` | `verified` | `SRC-001` | `from_pretrained` registers AutoConfig/AutoModel/AutoProcessor then loads model and processor |
+| `TGT-API-002` | `qwen_tts/inference/qwen3_tts_model.py:356-633` | `verified` | `SRC-001` | Base voice clone prompt and generation API |
+| `TGT-API-003` | `qwen_tts/inference/qwen3_tts_model.py:637-839` | `verified` | `SRC-001` | VoiceDesign and CustomVoice public wrapper APIs |
+| `TGT-CLI-001` | `qwen_tts/cli/demo.py:91-108` | `verified` | `SRC-001` | target CLI defaults are `cuda:0`, BF16 and FlashAttention-2 |
+| `TGT-CLI-002` | `qwen_tts/cli/demo.py:605-613` | `verified` | `SRC-001` | parsed target CLI values flow into `from_pretrained` |
+| `TGT-CONFIG-001` | `qwen_tts/core/models/configuration_qwen3_tts.py:22-499` | `verified` | `SRC-001` | speaker, code predictor, Talker and composite config nesting |
+| `TGT-MODEL-001` | `qwen_tts/core/models/modeling_qwen3_tts.py:311-393` | `verified` | `SRC-001` | ECAPA-style speaker encoder produces the speaker embedding |
+| `TGT-MODEL-002` | `qwen_tts/core/models/modeling_qwen3_tts.py:1427-1810` | `verified` | `SRC-001` | Talker backbone, codec-0 LM head and residual code predictor integration |
+| `TGT-MODEL-003` | `qwen_tts/core/models/modeling_qwen3_tts.py:1813-2292` | `verified` | `SRC-001` | composite conditional generation and prompt/speaker injection flow |
+| `TGT-MODEL-004` | `qwen_tts/core/models/modeling_qwen3_tts.py:1612-1633` | `verified` | `SRC-001` | `forward_sub_talker_finetune` returns residual-codebook loss |
+| `TGT-MODEL-005` | `qwen_tts/core/models/modeling_qwen3_tts.py:526-559` | `verified` | `SRC-001` | Talker RoPE math disables autocast and computes in FP32 before restoring input dtype |
+| `TGT-MODEL-006` | `qwen_tts/core/models/modeling_qwen3_tts.py:595-610` | `verified` | `SRC-001` | RMSNorm variance is computed in FP32 |
+| `TGT-MODEL-007` | `qwen_tts/core/models/modeling_qwen3_tts.py:634-657` | `verified` | `SRC-001` | eager attention softmax uses FP32 then casts to query dtype |
+| `TGT-TOK12-001` | `qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py:780-1024` | `verified` | `SRC-001` | split RVQ, 12Hz model encode/decode and causal/chunked decoder |
+| `TGT-TOK12-002` | `qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py:137-169` | `verified` | `SRC-001` | defaults are 24kHz, 1920 sample stride and 16 valid quantizers |
+| `TGT-TOK12-003` | `qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py:147-169` | `inference` | `SRC-001` | `24000/1920 = 12.5` frames/s is arithmetic derived from verified defaults, distinct from the “12Hz” name |
+| `TGT-TOK25-001` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:996-1273` | `verified` | `SRC-001` | DiT mel sampling and BigVGAN waveform decoder code exists |
+| `TGT-TOK25-002` | ledger-only | `pending_hardware` | `SRC-001, SRC-003, SRC-004, SRC-005` | official source/report/collections do not establish a fixed public executable 25Hz checkpoint |
+| `TGT-TOK25-003` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:1426-1440` | `verified` | `SRC-001` | `from_pretrained` resolves `campplus.onnx` and loads it |
+| `TGT-TOK25-004` | `qwen_tts/core/tokenizer_25hz/vq/speech_vq.py:16-32` | `verified` | `SRC-001` | speech VQ directly imports SoX, ONNX Runtime, Kaldi compliance and VQ/Whisper modules |
+| `TGT-TOK25-005` | `qwen_tts/core/tokenizer_25hz/vq/speech_vq.py:118-150` | `verified` | `SRC-001` | x-vector extraction uses ONNX CPUExecutionProvider plus SoX normalization and Kaldi fbank |
+| `TGT-TOK25-006` | `qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py:29-36` | `verified` | `SRC-001` | flash-attn import has a manual PyTorch fallback |
+| `TGT-TOK25-007` | `qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py:161-191` | `verified` | `SRC-001` | attention falls back manually when flash-attn is absent or dtype is not FP16/BF16 |
+| `TGT-TOK25-008` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:1235-1253` | `verified` | `SRC-001` | FP32 decoder rejects FA2/eager and selects SDPA |
+| `TGT-TOK25-009` | `qwen_tts/core/tokenizer_25hz/vq/core_vq.py:113-231` | `verified` | `SRC-001` | direct Euclidean codebook quantize/dequantize implementation |
+| `TGT-TOK25-010` | `qwen_tts/core/tokenizer_25hz/vq/core_vq.py:334-521` | `verified` | `SRC-001` | residual/group residual VQ encode/decode implementation |
+| `TGT-TOK25-011` | `qwen_tts/core/models/modeling_qwen3_tts.py:1891-1936` | `verified` | `SRC-001` | main model loads `speech_tokenizer/*`, tokenizer config and `generation_config.json` |
+| `TGT-TOK25-012` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:1282-1394` | `verified` | `SRC-001` | encoder plus composite tokenizer wiring and rate accessors exist |
+| `TGT-TOK25-013` | `qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py:1444-1526` | `verified` | `SRC-001` | composite encode/decode calls encoder, VQ decoder and waveform decoder |
+| `TGT-TOK25-014` | file-only `qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz` | `verified` | `SRC-001` | target index directly records this bundled asset's path/bytes/SHA-256 and `kind=binary`; no line claim is made |
+| `TGT-PROC-001` | `qwen_tts/core/models/processing_qwen3_tts.py:27-103` | `verified` | `SRC-001` | processor wraps Qwen tokenizer/ChatML text behavior |
+| `TGT-PROC-002` | `qwen_tts/inference/qwen3_tts_tokenizer.py:44-410` | `verified` | `SRC-001` | 12Hz/25Hz audio wrapper normalizes, encodes, decodes and exposes sample-rate contracts |
+| `TGT-DATA-001` | `finetuning/prepare_data.py:24-68` | `verified` | `SRC-001` | preprocessing materializes `audio_codes` into JSONL |
+| `TGT-DATA-003` | `finetuning/prepare_data.py:24-35` | `verified` | `SRC-001` | preprocessing defaults to `cuda:0` and passes it as tokenizer `device_map` |
+| `TGT-DATA-002` | `finetuning/dataset.py:33-217` | `verified` | `SRC-001` | dataset makes ChatML text, 24kHz reference mel and dual-track collate tensors |
+| `TGT-TRAIN-000` | `finetuning/sft_12hz.py:44-52` | `verified` | `SRC-001` | SFT initializes BF16 Accelerate and loads BF16 model with FlashAttention-2 |
+| `TGT-TRAIN-001` | `finetuning/sft_12hz.py:62-64` | `verified` | `SRC-001` | code passes model, optimizer and DataLoader to `accelerator.prepare` |
+| `TGT-TRAIN-002` | `finetuning/sft_12hz.py:82-111` | `verified` | `SRC-001` | code accesses speaker encoder, Talker internals and custom method through the prepared model |
+| `TGT-TRAIN-003` | `finetuning/sft_12hz.py:30-30` | `inference` | `SRC-001` | module global implies per-interpreter state; actual per-process behavior depends on launch/runtime |
+| `TGT-TRAIN-004` | `finetuning/sft_12hz.py:83-84` | `inference` | `SRC-001` | under multi-process launch each process may retain the first embedding it sees; execution is pending |
+| `TGT-TRAIN-005` | `finetuning/sft_12hz.py:100-121` | `verified` | `SRC-001` | exact loss is `outputs.loss + 0.3 * sub_talker_loss`, then backward, clip and optimizer step |
+| `TGT-TRAIN-006` | `finetuning/sft_12hz.py:58-64` | `inference` | `SRC-001` | DataLoader sharding is delegated to Accelerate runtime after `prepare`; exact wrapper/version behavior is pending execution |
+| `TGT-TRAIN-007` | `finetuning/sft_12hz.py:82-111` | `inference` | `SRC-001` | direct access to custom attributes/methods through the prepared model is wrapper/version-sensitive and pending multi-process execution |
+| `TGT-EXPORT-001` | `finetuning/sft_12hz.py:126-158` | `verified` | `SRC-001` | per-epoch copy/config mutation, speaker row 3000 and safetensors export |
+| `TGT-EXPORT-002` | `finetuning/sft_12hz.py:35-35` | `verified` | `SRC-001` | default initialization value is a Hugging Face repo ID |
+| `TGT-EXPORT-003` | `finetuning/sft_12hz.py:126-132` | `inference` | `SRC-001` | export uses `copytree` and directly opens `MODEL_PATH/config.json`, so actual export statically requires a local directory despite the default repo ID |
+| `TGT-GAP-001` | `finetuning/sft_12hz.py:31-158` | `inference` | `SRC-001` | absence of scheduler/resume/validation in this file is a fixed-tree audit inference, not proof of global absence |
+| `TGT-HW-001` | `pyproject.toml:1-45` | `pending_hardware` | `SRC-001` | no CANN/torch-npu dependency or CANN 8.5.2 compatibility evidence exists in the official target package |
+| `PH1-ROLE-MM` | ledger-only | `inference` | `SRC-019, SRC-020, SRC-021, SRC-022, SRC-043` | approved selection makes exact 12Hz NPU SFT the main reference role |
+| `PH1-ROLE-LLM` | ledger-only | `inference` | `SRC-026, SRC-027, SRC-079, SRC-083` | approved selection limits MindSpeed-LLM to text scaling satellite evidence |
+| `PH1-ROLE-MOSS` | ledger-only | `inference` | `SRC-030, SRC-031, SRC-047, SRC-103` | approved selection limits MOSS to speech/codec contrast |
+| `PH1-ENV-LANES` | ledger-only | `pending_hardware` | `SRC-028, SRC-071, SRC-087` | native 8.5.0 learning lane and user 8.5.2 validation lane remain distinct; 8.5.2 compatibility is unknown |
+
+Use the explicit Source IDs column verbatim; do not infer a default while parsing the table. Non-empty quotes are only `single-speaker fine-tuning`, `AutoModel.from_pretrained`, `outputs.loss + 0.3 * sub_talker_loss`, and `checkpoint-epoch-{epoch}`. Put those four exact line slices and line numbers in `tests/fixtures/evidence/qwen3-tts-excerpts.json`; the test above proves each quote occurs inside its declared range. All other quotes are empty. Generate fixed URLs from the registry template only for text files/ranges; binary file links use the fixed blob path without `#L` anchors, and ledger-only records link their `source_ids` through `source-ledger.csv`.
 
 - [ ] **Step 4: 写入 35-row coverage matrix**
 
@@ -943,8 +1335,8 @@ Use these exact dispositions; the validator requires a non-empty reason for `exc
 .github/workflows/inactive.yaml,excluded,,,,Repository maintenance workflow; not target execution flow
 .github/workflows/translate.yaml,excluded,,,,Repository translation workflow; not target execution flow
 .gitignore,excluded,,,,Repository hygiene only
-LICENSE,mapped,index.html,public-scope,TGT-PKG-001,
-MANIFEST.in,mapped,target/package-inference-api.html,package-layout,TGT-PKG-001,
+LICENSE,mapped,index.html,public-scope,TGT-PKG-003,
+MANIFEST.in,mapped,target/package-inference-api.html,package-layout,TGT-PKG-004,
 README.md,mapped,index.html,public-scope,TGT-SCOPE-002,
 examples/test_model_12hz_base.py,mapped,target/package-inference-api.html,base-api,TGT-API-002,
 examples/test_model_12hz_custom_voice.py,mapped,target/package-inference-api.html,custom-api,TGT-API-003,
@@ -958,42 +1350,75 @@ pyproject.toml,mapped,target/package-inference-api.html,dependencies,TGT-PKG-001
 qwen_tts/__init__.py,mapped,target/package-inference-api.html,package-exports,TGT-API-001,
 qwen_tts/__main__.py,mapped,target/package-inference-api.html,cli-entry,TGT-API-001,
 qwen_tts/cli/demo.py,mapped,target/package-inference-api.html,cli-demo,TGT-API-003,
-qwen_tts/core/__init__.py,excluded,,,,Empty package marker
+qwen_tts/core/__init__.py,mapped,target/tokenizer-12hz.html,package-tokenizer-registry,TGT-PKG-002,
 qwen_tts/core/models/__init__.py,mapped,target/model-architecture.html,model-exports,TGT-CONFIG-001,
 qwen_tts/core/models/configuration_qwen3_tts.py,mapped,target/model-architecture.html,composite-config,TGT-CONFIG-001,
 qwen_tts/core/models/modeling_qwen3_tts.py,mapped,target/model-architecture.html,model-call-flow,TGT-MODEL-001|TGT-MODEL-002|TGT-MODEL-003|TGT-MODEL-004,
 qwen_tts/core/models/processing_qwen3_tts.py,mapped,target/processor-contracts.html,text-contract,TGT-PROC-001,
-qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py,mapped,target/tokenizer-12hz.html,configuration,TGT-TOK12-001,
+qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py,mapped,target/tokenizer-12hz.html,configuration,TGT-TOK12-002|TGT-TOK12-003,
 qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py,mapped,target/tokenizer-12hz.html,encode-decode,TGT-TOK12-001,
 qwen_tts/core/tokenizer_25hz/configuration_qwen3_tts_tokenizer_v1.py,pending,target/tokenizer-25hz.html,configuration,TGT-TOK25-002,25Hz public checkpoint and executable path remain unknown
-qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py,pending,target/tokenizer-25hz.html,dit-bigvgan,TGT-TOK25-001|TGT-TOK25-002,Static source is mapped but runtime assets and execution are unverified
-qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz,pending,target/tokenizer-25hz.html,bundled-filter,TGT-TOK25-002,Metadata only; binary body is never copied into the public index
-qwen_tts/core/tokenizer_25hz/vq/core_vq.py,pending,target/tokenizer-25hz.html,vq-core,TGT-TOK25-001|TGT-TOK25-002,Static source is mapped but 25Hz execution remains unverified
-qwen_tts/core/tokenizer_25hz/vq/speech_vq.py,pending,target/tokenizer-25hz.html,speech-vq,TGT-TOK25-001|TGT-TOK25-002,Static source is mapped but external extractor assets remain unverified
-qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py,pending,target/tokenizer-25hz.html,whisper-encoder,TGT-TOK25-001|TGT-TOK25-002,Static source is mapped but external extractor assets remain unverified
+qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py,pending,target/tokenizer-25hz.html,dit-bigvgan,TGT-TOK25-001|TGT-TOK25-003|TGT-TOK25-008|TGT-TOK25-012|TGT-TOK25-013,Static dependencies and encode/decode wiring are verified but runtime assets and execution are unverified
+qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz,pending,target/tokenizer-25hz.html,bundled-filter,TGT-TOK25-014,Fixed binary URL and metadata only; binary body is never copied and execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/core_vq.py,pending,target/tokenizer-25hz.html,vq-core,TGT-TOK25-009|TGT-TOK25-010,Direct VQ source is mapped; execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/speech_vq.py,pending,target/tokenizer-25hz.html,speech-vq,TGT-TOK25-004|TGT-TOK25-005,Direct ONNX/SoX/Kaldi dependencies are mapped; execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py,pending,target/tokenizer-25hz.html,whisper-encoder,TGT-TOK25-006|TGT-TOK25-007,Direct flash-attn dtype/manual fallback is mapped; execution remains unverified
 qwen_tts/inference/qwen3_tts_model.py,mapped,target/package-inference-api.html,wrapper-call-flow,TGT-API-001|TGT-API-002|TGT-API-003,
 qwen_tts/inference/qwen3_tts_tokenizer.py,mapped,target/processor-contracts.html,audio-wrapper,TGT-PROC-002,
 ```
 
 - [ ] **Step 5: 实现 evidence and coverage validators**
 
-Add frozen `Evidence` with the eight JSON fields plus `quote`, parse all 22 IDs uniquely, require the four-state enum, validate line order and quote bounds, and construct fixed URLs only with the snapshot registry. Implement coverage with `csv.DictReader`: compare its path multiset to target index `files`, reject unknown evidence IDs/statuses, require reasons and page/section according to disposition.
+Add frozen `Evidence` with the exact fields below. `validate_evidence` first calls the same total recursive schema validator, then parses unique IDs, validates every `source_id` against the CSV ledger, and for source-backed records looks up `path` in the target index, rejects binary line ranges, and enforces `1 <= start_line <= end_line <= line_count`. It validates the four fixed quote fixtures against their exact range content. `fixed_url(row, registry)` appends `#Lstart-Lend` only for source-backed text; binary coverage URLs are `<blob-template before #L>{path}` without a line anchor. `validate_target_coverage` uses `csv.DictReader`, compares its path multiset to target-index files, rejects unknown evidence IDs/dispositions, and requires reason/page/section according to disposition.
 
 ```python
 @dataclass(frozen=True)
 class Evidence:
     evidence_id: str
-    snapshot_id: str
-    path: str
-    start_line: int
-    end_line: int
+    snapshot_id: str | None
+    path: str | None
+    start_line: int | None
+    end_line: int | None
     state: str
     claim: str
     quote: str
+    source_ids: tuple[str, ...]
 
 
 EVIDENCE_STATES = {"verified", "project_claim", "inference", "pending_hardware"}
 DISPOSITIONS = {"mapped", "excluded", "pending"}
+```
+
+The core validator loop is mandatory and uses the target index rather than trusting evidence JSON:
+
+```python
+def validate_evidence(data, registry, target_index, ledger_ids):
+    errors = validate_against_schema(data, load_target_evidence_schema(), "evidence")
+    if errors:
+        return errors
+    files = {row["path"]: row for row in target_index["files"]}
+    seen = set()
+    for i, row in enumerate(data["records"]):
+        prefix = f"evidence.records[{i}]"
+        if row["evidence_id"] in seen:
+            errors.append(f"{prefix}.evidence_id: duplicate {row['evidence_id']}")
+        seen.add(row["evidence_id"])
+        for source_id in row["source_ids"]:
+            if source_id not in ledger_ids:
+                errors.append(f"{prefix}.source_ids: unknown {source_id}")
+        if row["path"] is not None:
+            file_row = files.get(row["path"])
+            if file_row is None:
+                errors.append(f"{prefix}.path: not in target index")
+            elif row["start_line"] is None and file_row["kind"] != "binary":
+                errors.append(f"{prefix}.path: file-only evidence requires indexed binary")
+            elif row["start_line"] is not None and file_row["line_count"] is None:
+                errors.append(f"{prefix}.path: binary file cannot have line range")
+            elif row["end_line"] is not None and row["end_line"] > file_row["line_count"]:
+                errors.append(f"{prefix}.end_line: exceeds {row['path']} line_count")
+            if row["snapshot_id"] not in registry:
+                errors.append(f"{prefix}.snapshot_id: unknown {row['snapshot_id']}")
+    return errors
 ```
 
 Extend `validate_phase2.py` default mode to run `validate_indexes()`, evidence validation and coverage validation; keep `--indexes-only` behavior unchanged.
@@ -1007,12 +1432,12 @@ python3 -m unittest tests.test_phase2_contracts -v
 python3 scripts/validate_phase2.py
 ```
 
-Expected: 6 Phase 2 contract tests pass; CLI prints `validated Phase 2 data: 4 indexes, 22 evidence records, 35 target coverage rows, 0 omissions`.
+Expected: every Phase 2 contract test passes. CLI sets `evidence_count = len(load_evidence(...))`, prints that value in `validated Phase 2 data: 4 indexes, {evidence_count} evidence records, 35 target coverage rows, 0 omissions`, and the test parses the printed integer and compares it to the loaded length rather than a hand-maintained literal.
 
 - [ ] **Step 7: 提交 target evidence contracts**
 
 ```bash
-git add research/target-evidence.json research/target-coverage.csv scripts/phase2_contracts.py scripts/validate_phase2.py tests/test_phase2_contracts.py
+git add research/target-evidence.json research/target-coverage.csv research/schemas/target-evidence.schema.json tests/fixtures/evidence/qwen3-tts-excerpts.json scripts/phase2_contracts.py scripts/validate_phase2.py tests/test_phase2_contracts.py
 git commit -m "data: map target evidence and coverage"
 ```
 
@@ -1036,7 +1461,7 @@ Expected: one commit; no HTML or candidate source tree is changed yet.
 
 **Interfaces:**
 - Consumes: source indexes, snapshot registry, evidence records when referenced, and JSON page catalogs matching `Page(slug, title, summary, order, group, objectives, prerequisites, sections)`.
-- Produces: `load_page_catalogs(paths: list[Path]) -> list[dict]`, `render_page(page, navigation, evidence, search_documents) -> str`, `build_site(output_root: Path, catalog_paths: list[Path]) -> list[Path]`; four foundation pages plus local `search-index.json` in this task.
+- Produces: `validate_catalogs(data: object, evidence_ids: set[str]) -> list[str]`, `load_page_catalogs(paths: list[Path]) -> list[dict]`, `relative_href(from_slug: str, to_slug: str) -> str`, `render_page(page, navigation, evidence, search_documents) -> str`, `build_site(output_root: Path, catalog_paths: list[Path]) -> list[Path]`; four foundation pages plus local `search-index.json` in this task.
 
 - [ ] **Step 1: 写入生成器 failing tests**
 
@@ -1087,6 +1512,13 @@ class SiteBuilderTest(unittest.TestCase):
         encoded = script_safe_json([{"title": "</script><img src=x onerror=alert(1)>"}])
         self.assertNotIn("</script", encoded.lower())
         self.assertIn(r"\u003c/script", encoded)
+
+    def test_every_page_search_form_targets_relative_search_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, [ROOT / "content/site-foundation.json"])
+            self.assertIn('action="search.html"', (output / "index.html").read_text())
+            self.assertIn('action="../search.html"', (output / "indexes/source-files.html").read_text())
 ```
 
 - [ ] **Step 2: 运行 tests 并确认 builder 缺失**
@@ -1108,11 +1540,11 @@ Create `content/site-foundation.json` with `schema_version: 1` and exactly these
 
 The homepage must include the literal sentences `本阶段没有运行 Qwen3-TTS 训练。` and `CANN 8.5.2 兼容性：unknown，待真机验证。`. Every page has at least one objective, prerequisite `熟悉 PyTorch 单卡张量与训练循环`, and a four-state legend.
 
-The catalog uses only these block types: `paragraph` (`text`, `state`, `evidence_ids`), `call_chain` (`items`), `table` (`headers`, `rows`), `source_refs` (`evidence_ids`), and `index_table` (`dataset`: `files|symbols|configs`). Raw HTML is not accepted.
+The catalog root is exactly `{schema_version: 1, pages: Page[]}`. A `Page` requires only `slug,title,summary,order,group,objectives,prerequisites,sections`; slug matches `^(index|search|indexes/[a-z0-9-]+|target/[a-z0-9-]+)\.html$`, order is positive integer, objectives/prerequisites are non-empty string arrays. A `Section` requires only `id,title,blocks`; id matches `^[a-z][a-z0-9-]*$`. Blocks use a tagged union with `additionalProperties:false`: `paragraph` requires `type,text,state,evidence_ids`; `call_chain` requires `type,items` where each item is `{label,path,symbol,evidence_ids}`; `table` requires `type,headers,rows` and every row width equals headers; `source_refs` requires `type,evidence_ids`; `index_table` requires `type,dataset` with enum `files|symbols|configs`. Raw HTML is rejected. `validate_catalogs` also requires unique slugs/orders/section IDs and verifies every block evidence ID exists.
 
 - [ ] **Step 4: 实现 shared partial renderer and build CLI**
 
-Create `scripts/site_builder.py` with HTML escaping on every catalog/index value. Reuse the existing DOM contracts exactly: `chapter-nav`, `article-content`, `evidence-rail`, `toggle-left`, `toggle-right`, `site-search`, `chapter-tree`, `page-toc`, evidence cards, drawer buttons and `assets/app.js`. Compute asset/search/nav links with `posixpath.relpath`, set `aria-current="page"`, generate one `h1`, and emit previous/next links from sorted `order` only when the neighbor exists in loaded catalogs.
+Create `scripts/site_builder.py` with HTML escaping on every catalog/index value. Reuse the existing DOM contracts exactly: `chapter-nav`, `article-content`, `evidence-rail`, `toggle-left`, `toggle-right`, `site-search`, `chapter-tree`, `page-toc`, evidence cards, drawer buttons and `assets/app.js`. Compute asset/search/nav links with `relative_href(from_slug, to_slug) = posixpath.relpath(to_slug, posixpath.dirname(from_slug) or ".")`; every page search form uses `method="get"`, input name `q`, and `action=relative_href(page["slug"], "search.html")`. Set `aria-current="page"`, generate one `h1`, and emit previous/next links from sorted `order` only when the neighbor exists in loaded catalogs. For index fixed links, text records use line anchors and binary records use the fixed blob URL without an anchor.
 
 ```python
 def script_safe_json(data: object) -> str:
@@ -1158,7 +1590,7 @@ renderResults(query) {
 }
 ```
 
-`search.html` embeds the same documents as `site/assets/search-index.json`; runtime never fetches remote or local JSON, so `file://` search remains functional. Preserve the no-script page link list.
+`search.html` embeds the same documents as `site/assets/search-index.json`; runtime does not fetch search JSON or any remote resource. Supported offline use is local HTTP plus browser offline mode; no `file://` promise is made. Preserve an initial-HTML alphabetical page directory under `no-script-index` so content remains navigable when JavaScript is disabled.
 
 Extend the existing `SearchController` constructor with `windowRef = window`, store `this.window`, `this.data`, `this.results`, and `this.resultsStatus`, then initialize query state before registering later interactions. This closes the direct-link contract used by Playwright:
 
@@ -1167,7 +1599,7 @@ const query = new URLSearchParams(this.window.location.search).get('q') ?? '';
 if (this.input) this.input.value = query;
 this.renderResults(query);
 this.form?.addEventListener('submit', (event) => {
-  if (!this.data) return;
+  if (!this.data || this.window.location.pathname.split('/').pop() !== 'search.html') return;
   event.preventDefault();
   const value = this.input?.value ?? '';
   const url = new URL(this.window.location.href);
@@ -1190,7 +1622,7 @@ python3 -m unittest tests.test_site_builder -v
 python3 scripts/build_site.py --output site --catalog content/site-foundation.json
 ```
 
-Expected: 4 tests pass; CLI prints `built 4 pages and 1 search index`; the four HTML files and search JSON are created deterministically; malicious `</script>` input is encoded as `\u003c/script`.
+Expected: all foundation tests pass; CLI prints counts derived from `len(pages)`/`len(documents)`; the four HTML files and search JSON are deterministic; malicious `</script>` input is encoded as `\u003c/script`; root and nested forms have the correct relative search action.
 
 - [ ] **Step 8: 提交 generator foundation**
 
@@ -1243,13 +1675,13 @@ Create `content/target-architecture.json` using only renderer block types and th
 
 | Order / slug | Sections, call flow and mandatory boundary |
 | --- | --- |
-| `2 / target/package-inference-api.html` | `package-layout`: exports/CLI/examples/dependencies; `load-chain`: `Qwen3TTSModel.from_pretrained → AutoConfig.register → AutoModel.from_pretrained → AutoProcessor.from_pretrained`; `base-api`: prompt creation → voice clone generation; `voice-design-api`; `custom-api`; boundary: examples require external weights/audio and are not automated tests |
-| `3 / target/model-architecture.html` | `composite-config`: speaker/code-predictor/talker/top config nesting; `speaker-encoder`: 24kHz 128-bin mel → speaker embedding; `talker`: text projection + codec embedding → Qwen3 decoder → codec-0 logits; `code-predictor`: hidden state + prior codebooks → remaining 15 groups; `generation-flow`: prompt → Talker → MTP → tokenizer; boundary: static call map, no tensor/numerical run |
-| `4 / target/tokenizer-12hz.html` | `configuration`; `encode-contract`: 12.5 FPS/16 codebooks is source/report claim with state labels; `rvq`: `SplitResidualVectorQuantizer`; `decode-contract`: `Qwen3TTSTokenizerV2Decoder.forward/chunked_decode`; `training-gap`: tokenizer training/discriminator/loss are not public in this tree |
-| `5 / target/tokenizer-25hz.html` | `configuration`; `encoder-vq`; `dit-mel`; `bigvgan-waveform`; `asset-boundary`: official collection lacks fixed public 25Hz tokenizer checkpoint and external extractor assets are required; mark runtime statements `pending_hardware`, not verified |
+| `2 / target/package-inference-api.html` | `package-layout` [`TGT-PKG-001,TGT-PKG-002,TGT-PKG-003,TGT-PKG-004`]: exports/CLI/dependencies/license and the source-distribution prune of assets/examples/finetuning; `target-defaults` [`TGT-CLI-001,TGT-CLI-002`]: CUDA:0/BF16/FA2 are target NVIDIA defaults, not migration advice; `load-chain` [`TGT-API-001`]: `Qwen3TTSModel.from_pretrained → AutoConfig.register → AutoModel.from_pretrained → AutoProcessor.from_pretrained`; `base-api` [`TGT-API-002`]: prompt → voice clone; `voice-design-api` and `custom-api` [`TGT-API-003`]; `package-boundary`: external weights/audio required and installed package may omit training/examples |
+| `3 / target/model-architecture.html` | `composite-config` [`TGT-CONFIG-001`]; `speaker-encoder` [`TGT-MODEL-001`]: 24kHz 128-bin mel → embedding; `talker` [`TGT-MODEL-002`]: text+codec → decoder → codec-0 logits; `code-predictor` [`TGT-MODEL-004`]: hidden state/prior codebooks → 15 residual groups; `precision-islands` [`TGT-MODEL-005,TGT-MODEL-006,TGT-MODEL-007`]: RoPE/RMSNorm/attention FP32 ranges; `generation-flow` [`TGT-MODEL-003,TGT-TOK25-011`]: prompt → Talker → MTP → speech tokenizer/generation config; `model-boundary`: static call map only |
+| `4 / target/tokenizer-12hz.html` | `package-tokenizer-registry` [`TGT-PKG-002`]; `configuration` [`TGT-TOK12-002`]: 24kHz, stride 1920, 16 quantizers are verified; `rate-derivation` [`TGT-TOK12-003`]: `24000/1920=12.5 FPS` is separately labeled inference; `encode-contract` and `rvq` [`TGT-TOK12-001`]; `decode-contract` [`TGT-TOK12-001`]; `training-gap`: no public tokenizer training lifecycle in this tree |
+| `5 / target/tokenizer-25hz.html` | `asset-inventory` [`TGT-TOK25-002`]: public executable checkpoint remains pending; `encoder-vq` [`TGT-TOK25-012,TGT-TOK25-013`]; `campplus-dependency` [`TGT-TOK25-003`]; `speech-vq-dependencies` [`TGT-TOK25-004,TGT-TOK25-005`]; `whisper-attention` [`TGT-TOK25-006,TGT-TOK25-007`]; `vq-core` [`TGT-TOK25-009,TGT-TOK25-010`]; `dit-bigvgan` [`TGT-TOK25-001`]; `decoder-precision` [`TGT-TOK25-008`]; `main-model-assets` [`TGT-TOK25-011`]; `asset-boundary`: split verified dependency/code facts from pending execution/public checkpoint |
 | `6 / target/processor-contracts.html` | `text-contract`: Qwen tokenizer/ChatML/BatchFeature; `audio-wrapper`: normalize URL/path/base64/array then encode/decode; `shape-contract`: text ids, `(T,16)` 12Hz codes, sample-rate/downsample metadata; `prompt-contract`: x-vector-only versus ICL text+audio; `migration-boundary`: no Ascend claim |
 
-Each page must contain: one learning objective list; prerequisite `熟悉 PyTorch 单卡张量与自回归生成`; at least two evidence-linked claim blocks; one call-chain block; a source table with exact target paths; a status/boundary section. The 25Hz page must visibly show both `已证实：静态源码存在` and `待真机验证：公开可执行性 unknown`.
+Each page must contain: one learning objective list; prerequisite `熟悉 PyTorch 单卡张量与自回归生成`; every bracketed evidence ID above in its named section; at least one `call_chain` whose items name the exact symbols/path sequence stated above; a source table with exact target paths; a status/boundary section. Tests assert the exact section-ID set per page, every page evidence ID resolves, and each required call-chain label appears in order. The 25Hz page must visibly show both `已证实：静态依赖与源码路径` and `待真机验证：公开可执行性 unknown`; it must not collapse all VQ files under generic model evidence. All CUDA/BF16/FA2/FP32 teaching is descriptive of target defaults/precision only and contains no migration mapping.
 
 - [ ] **Step 4: 构建九页并检查 immutable source links**
 
@@ -1308,7 +1740,7 @@ Append:
         pages = load_page_catalogs(catalogs)
         self.assertEqual([page["order"] for page in pages], list(range(1, 14)))
         serialized = json.dumps(pages, ensure_ascii=False)
-        for text in ["finetuning/README.md", "TTSDataset.collate_fn", "main_loss + 0.3 * sub_talker_loss", "Accelerator", "AdamW", "speaker row 3000", "CANN 8.5.2 兼容性：unknown"]:
+        for text in ["finetuning/README.md", "TTSDataset.collate_fn", "outputs.loss + 0.3 * sub_talker_loss", "accelerator.prepare", "AdamW", "speaker row 3000", "CANN 8.5.2 兼容性：unknown"]:
             self.assertIn(text, serialized)
 ```
 
@@ -1324,12 +1756,12 @@ Create `content/target-training.json` with these exact contracts:
 
 | Order / slug | Sections, call flow and mandatory boundary |
 | --- | --- |
-| `7 / target/sft-data-collate.html` | `public-recipe`: only 12Hz Base single-speaker; `jsonl-contract`: `audio/text/ref_audio`, then offline `audio_codes`; `offline-codes`: `prepare_data.main`; `dataset-item`: text ids + `(T,16)` codes + 24kHz/128-bin ref mel; `collate-contract`: dual `(B,T,2)` input, `(B,T,16)` codec ids, masks and codec-0 labels; no distributed sampler/bucketing claim |
-| `8 / target/sft-training-loop.html` | `setup`: model/config/dataset/dataloader; `embedding-flow`: text + codec + speaker position 6 + residual embeddings; `main-forward`: codec-0 labels; `sub-talker`: selected hidden states/codes; `training-loop`: `main_loss + 0.3 * sub_talker_loss → accelerator.backward → clip → AdamW.step`; no scheduler/validation/resume and no successful-run claim |
-| `9 / target/optimizer-checkpoint-export.html` | `accelerate`: BF16, accumulation 4, main-process ownership; `optimizer`: AdamW lr/weight decay and clip 1.0; `epoch-export`: copy base directory; `custom-speaker`: rewrite `tts_model_type`, speaker id 3000, drop speaker encoder, inject embedding; `checkpoint-gap`: inference-oriented safetensors, not full optimizer/RNG fault resume |
-| `10 / target/coverage-gaps.html` | `target-coverage`: render all 35 file dispositions; `reference-roles`: MindSpeed-MM exact 12Hz NPU SFT anchor, MindSpeed-LLM text scale satellite, MOSS speech/codec contrast, without combining capabilities; `environment-lanes`: exact two-lane table; `future-validation`: import/device, operator/numerics, loss parity, audio/codec, checkpoint/inference, 8-card, multi-node, quality; `deferred-plans`: full reference walkthroughs, migration mapping, NPU execution |
+| `7 / target/sft-data-collate.html` | `public-recipe` [`TGT-SCOPE-001`]: only 12Hz Base single-speaker; `jsonl-contract` [`TGT-DATA-001`]: `audio/text/ref_audio` then `audio_codes`; `preprocess-device` [`TGT-DATA-003`]: default CUDA:0/device_map; `offline-codes` [`TGT-DATA-001`]: `prepare_data.main → tokenizer.encode → code.cpu().tolist → JSONL`; `dataset-item` and `collate-contract` [`TGT-DATA-002`]: text ids, `(T,16)`, 24kHz/128-bin ref mel, dual `(B,T,2)`, masks and codec-0 labels; `data-boundary`: no bucketing claim and sharding belongs to runtime discussion |
+| `8 / target/sft-training-loop.html` | `target-precision-defaults` [`TGT-TRAIN-000`]: BF16+FA2 target default; `setup` [`TGT-TRAIN-001`]: model/config/dataset/dataloader → `accelerator.prepare`; `prepared-model-access` [`TGT-TRAIN-002,TGT-TRAIN-007`]: verified direct access to speaker_encoder/talker/custom method plus wrapper/version pending inference; `dataloader-sharding` [`TGT-TRAIN-006`]: Accelerate runtime takes ownership, behavior pending execution; `embedding-flow` [`TGT-TRAIN-002`]; `main-forward`/`sub-talker` [`TGT-MODEL-004,TGT-TRAIN-005`]; `training-loop` [`TGT-TRAIN-005`]: `outputs.loss + 0.3 * sub_talker_loss → accelerator.backward → clip → AdamW.step`; `training-boundary`: no scheduler/validation/resume/success claim |
+| `9 / target/optimizer-checkpoint-export.html` | `accelerate-ownership` [`TGT-TRAIN-001,TGT-TRAIN-003,TGT-TRAIN-004,TGT-TRAIN-006,TGT-TRAIN-007`]: distinguish verified calls from inferred/pending process-local state/wrapper behavior; `optimizer` [`TGT-TRAIN-005`]: AdamW/clip; `repo-id-vs-local-path` [`TGT-EXPORT-002,TGT-EXPORT-003`]: default HF repo ID conflicts statically with copytree/direct config open, so actual export requires local directory; `main-process-export` [`TGT-EXPORT-001`]: lines 126 and 147-158; `custom-speaker` [`TGT-EXPORT-001`]: config rewrite, id 3000, drop speaker encoder, inject embedding; `checkpoint-gap` [`TGT-GAP-001`]: safetensors export is not optimizer/RNG resume |
+| `10 / target/coverage-gaps.html` | `target-coverage`: all 35 dispositions; `reference-roles` [`PH1-ROLE-MM,PH1-ROLE-LLM,PH1-ROLE-MOSS`]: roles stay separate; `environment-lanes` [`PH1-ENV-LANES,TGT-HW-001`]: exact two lanes and 8.5.2 unknown; `future-validation`: import/device, operator/numerics, loss parity, audio/codec, checkpoint/inference, 8-card, multi-node, quality; `deferred-plans`: full reference walkthroughs, migration mapping, NPU execution |
 
-The coverage page must distinguish documentation complete, source statically verified, project claim and hardware pending. It must say `本页不是迁移方案` and `本研究没有运行 CUDA、NPU、训练、推理或评测`. The project-native lane must not be described as reproduced, and target lane must remain unknown.
+Each page must contain the exact named section IDs and bracketed evidence IDs above, plus a call-chain block in the stated order. Tests compare these section sets and verify all evidence IDs resolve. The Accelerate page must say DataLoader sharding is handed to Accelerate runtime, not infer “no distributed sampler means no distribution”; wrapper/multi-process/global-speaker behavior is `inference`/pending execution and must not assert failure. The coverage page must distinguish documentation complete, source statically verified, project claim and hardware pending. It must say `本页不是迁移方案` and `本研究没有运行 CUDA、NPU、训练、推理或评测`. The project-native lane must not be described as reproduced, and target lane must remain unknown.
 
 - [ ] **Step 4: 构建完整 13-page site**
 
@@ -1378,10 +1810,11 @@ Expected: one commit with the complete 13-page generated site; no candidate sour
 - Modify: `tests/site/template-visual.spec.js-snapshots/mobile-template-chromium-darwin.png`
 - Create: `tests/site/phase2-navigation-search.spec.js`
 - Create: `tests/site/phase2-responsive-accessibility.spec.js`
+- Modify: `IMPLEMENTATION_NOTES.md`
 
 **Interfaces:**
-- Consumes: complete 13-page site, content catalogs, 4 indexes, 22 evidence records, 35 coverage rows and existing Playwright shell behavior.
-- Produces: `validate_generated_site(site_root: Path, catalogs: list[Path]) -> list[str]`, `validate_fixed_links(...)`, `validate_public_tracking(...)`; final `validate_phase2.py` gate and 49 Playwright regressions.
+- Consumes: complete 13-page site, content catalogs, 4 indexes, loaded evidence records, 35 coverage rows and existing Playwright shell behavior.
+- Produces: `validate_generated_site(site_root: Path, pages: list[dict], evidence: dict[str, Evidence], coverage: list[dict]) -> list[str]`, `validate_cross_contracts(pages, evidence, coverage) -> list[str]`, `expected_generated_outputs(pages) -> set[str]`, `validate_fixed_links(site_root, registry) -> list[str]`, `validate_public_tracking(root) -> list[str]`; final `validate_phase2.py` gate and Playwright regressions.
 
 - [ ] **Step 1: 写入 Python failing site validation tests**
 
@@ -1392,17 +1825,25 @@ self.assertIn("index.html: broken local link target/removed.html", errors)
 self.assertIn("index.html: aria-controls missing-node has no matching id", errors)
 self.assertIn("index.html: remote runtime resource https://example.com/x.js", errors)
 self.assertIn("target coverage: missing qwen_tts/inference/qwen3_tts_model.py", errors)
+self.assertIn("coverage qwen_tts/core/__init__.py: missing section target/tokenizer-12hz.html#package-tokenizer-registry", errors)
+self.assertIn("target/model-architecture.html: unknown evidence TGT-NOT-REAL", errors)
+self.assertIn("important evidence PH1-ENV-LANES: not referenced by any page", errors)
+self.assertIn("site: unexpected generated output target/stale.html", errors)
 ```
 
 - [ ] **Step 2: 实现 stdlib HTML/link/heading/ARIA/offline validators**
 
-Use `html.parser.HTMLParser` to collect tags, ids, headings, href/src/link rel and ARIA references. For every one of 13 pages require: one `h1`; heading levels never jump by more than one; all relative href targets and fragments exist; all `aria-controls` values resolve; all runtime `script`, stylesheet, font, image and search data URLs are local; external anchor citations are allowed only over `https`; evidence status is in the four-state enum. Compare every generated HTML/JSON byte-for-byte with a temporary `build_site()` output to detect stale artifacts.
+Use `html.parser.HTMLParser` to collect tags, ids, headings, href/src/link rel, form action and ARIA references. For every one of 13 pages require: one `h1`; heading levels never jump by more than one; all relative href/action targets and fragments exist; all `aria-controls` values resolve; all runtime `script`, stylesheet, font, image and search data URLs are same-site relative; external anchor citations are allowed only over `https`; evidence status is in the four-state enum. `expected_generated_outputs(pages)` returns every page slug plus `assets/search-index.json`; compare that exact set with tracked generated outputs, reject missing and unexpected files, then byte-compare each file with a fresh temporary `build_site()` output.
+
+`validate_cross_contracts` builds `catalog = {slug: {section_id}}` and `known_evidence = set(evidence)`. For every mapped/pending coverage row it requires the referenced page and section to exist; for every block it requires its evidence IDs to exist; it requires every evidence ID used by coverage to be referenced by its destination section; and it requires `TGT-SCOPE-002`, `TGT-TOK25-002`, `PH1-ROLE-MM`, `PH1-ROLE-LLM`, `PH1-ROLE-MOSS`, and `PH1-ENV-LANES` to appear in at least one page. This is the final page/section/evidence/ledger bridge; exact stable error strings are those asserted in Step 1.
 
 Extend `validate_phase2.py` success output to exactly:
 
 ```text
-validated Phase 2: 4 indexes / 3270 files, 22 evidence records, 35 coverage rows, 13 pages, 0 broken links, 0 omissions
+validated Phase 2: 4 indexes / 3270 files, {len(evidence)} evidence records, 35 coverage rows, 13 pages, 0 broken links, 0 omissions
 ```
+
+Render the `{len(evidence)}` field at runtime from the loaded evidence dict and assert that the printed integer equals it; do not maintain an independent numeric evidence constant.
 
 - [ ] **Step 3: 泛化 existing template tests to generated homepage**
 
@@ -1410,7 +1851,7 @@ Update old HCCL/MindSpeed-specific assertions, not the stable shell behavior. `t
 
 - [ ] **Step 4: 写入 multi-page navigation/search tests**
 
-Create `tests/site/phase2-navigation-search.spec.js` with five tests:
+Create `tests/site/phase2-navigation-search.spec.js` with these tests (plus the index/coverage assertions below):
 
 ```javascript
 import { expect, test } from '@playwright/test';
@@ -1426,13 +1867,26 @@ test('previous and next links form a non-cyclic ordered path', async ({ page }) 
   await expect(page.getByRole('navigation', { name: '相邻章节' }).getByRole('link').last()).toHaveAttribute('href', 'tokenizer-12hz.html');
 });
 
-test('inline search finds a symbol without network fetch', async ({ page }) => {
+test('loaded site keeps inline search working after browser goes offline', async ({ page, context }) => {
   const requests = [];
   page.on('request', (request) => requests.push(request.url()));
-  await page.goto('/site/search.html?q=forward_sub_talker_finetune');
+  await page.goto('/site/search.html');
+  await context.setOffline(true);
+  await page.locator('#site-search input[name=q]').fill('forward_sub_talker_finetune');
+  await page.locator('#site-search').press('Enter');
   await expect(page.getByRole('status')).toContainText('找到');
   await expect(page.getByRole('link', { name: /forward_sub_talker_finetune/ })).toBeVisible();
   expect(requests.every((url) => new URL(url).origin === new URL(page.url()).origin)).toBe(true);
+});
+
+test('nested target search form resolves to root search results', async ({ page }) => {
+  await page.goto('/site/target/model-architecture.html');
+  await page.locator('#site-search input[name=q]').fill('RMSNorm');
+  await Promise.all([
+    page.waitForURL(/\/site\/search\.html\?q=RMSNorm$/),
+    page.locator('#site-search').press('Enter'),
+  ]);
+  await expect(page.getByRole('status')).toContainText('找到');
 });
 
 test('file and config indexes expose all snapshots without source bodies', async ({ page }) => {
@@ -1453,7 +1907,7 @@ test('coverage page exposes all target dispositions and future interfaces', asyn
 
 - [ ] **Step 5: 写入 responsive/accessibility/offline tests**
 
-Create `tests/site/phase2-responsive-accessibility.spec.js` with five tests: axe WCAG A/AA on `model-architecture.html` at 1440×900; axe on `sft-data-collate.html` at 1024×768; axe plus both drawers on `coverage-gaps.html` at 390×844; JavaScript-disabled traversal that still sees article/evidence/fixed links; 720px layout viewport/200% reflow with wide coverage/index tables and no document-level horizontal overflow. Every axe assertion prints the full violation JSON on failure.
+Create `tests/site/phase2-responsive-accessibility.spec.js` with axe WCAG A/AA on `model-architecture.html` at 1440×900; axe on `sft-data-collate.html` at 1024×768; axe plus both drawers on `coverage-gaps.html` at 390×844; JavaScript-disabled traversal that sees article text, evidence fixed links and the initial-HTML alphabetical `no-script-index`; 720px layout viewport/200% reflow with wide coverage/index tables and no document-level horizontal overflow. Every axe assertion prints the full violation JSON on failure.
 
 - [ ] **Step 6: 运行 Python validators and suites**
 
@@ -1465,7 +1919,7 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-Expected: exact validator success line shown above; 36 Python tests pass; whitespace check has no output.
+Expected: validator prints the dynamic evidence count and fixed 4/3270/35/13 structural counts; all discovered Python tests pass; whitespace check has no output.
 
 - [ ] **Step 7: 更新并复验三视口 screenshots**
 
@@ -1482,7 +1936,7 @@ Expected: three homepage snapshots update once; the second command reports 3 pas
 
 Run: `npm test`
 
-Expected: 49 tests pass: the existing 39 shell regressions (with content-specific assertions generalized) plus 10 Phase 2 multi-page/search/responsive/accessibility tests.
+Expected: every discovered Playwright test passes; report the runner's actual total instead of a hand-maintained expected count.
 
 - [ ] **Step 9: 运行 final public-content and actual-path audit**
 
@@ -1496,16 +1950,20 @@ for path in finetuning/README.md finetuning/dataset.py finetuning/sft_12hz.py qw
 git status --short
 ```
 
-Expected: restricted tracking, placeholder and absolute-path scans have no output; all six verified target paths exist; status lists only Task 8 intended files before commit.
+Expected: restricted tracking, red-flag-token and absolute-path scans have no output; all six verified target paths exist; status lists only Task 8 intended files before commit.
 
-- [ ] **Step 10: 提交 completion gates**
+- [ ] **Step 10: 记录 Phase 2 completion/deviations/deferred work**
+
+Append a dated `Phase 2 target walkthrough completion` entry to `IMPLEMENTATION_NOTES.md` with: generated 13-page scope; actual derived evidence/test counts; local-HTTP/browser-offline definition; implementation deviations from this plan; identity limitation inherited from Task 3; no CUDA/NPU/model execution; CANN 8.5.2 unknown; and the unchanged deferrals (full MM/LLM/MOSS walkthroughs, migration mapping, 8-card/multi-node/NPU execution).
+
+- [ ] **Step 11: 提交 completion gates**
 
 ```bash
-git add scripts/phase2_contracts.py scripts/validate_phase2.py tests/test_phase2_contracts.py tests/site
+git add scripts/phase2_contracts.py scripts/validate_phase2.py tests/test_phase2_contracts.py tests/site IMPLEMENTATION_NOTES.md
 git commit -m "test: verify Phase 2 target walkthrough"
 ```
 
-Expected: one commit; `python3 scripts/validate_phase2.py`, Python tests and 49 Playwright tests remain green; no push occurs.
+Expected: one commit; validator, Python tests and all discovered Playwright tests remain green; no push occurs.
 
 ## Completion Verification
 
@@ -1523,8 +1981,8 @@ git ls-files | rg '(^|/)\.superpowers/source-checkouts/|\.(safetensors|ckpt|pt|p
 Required evidence:
 
 - Four deterministic indexes validate at exact revisions and total 3,270 materialized files; archive inputs were never described or handled as Git repositories.
-- 22 bounded evidence records use all four states; 35 target files have exactly one mapped/excluded/pending disposition.
+- The dynamically counted bounded evidence records use all four states, resolve every `source_id` against the Phase 1 ledger, and 35 target files have exactly one mapped/excluded/pending disposition.
 - The generated site has exactly 13 coverage-driven pages, one `h1` each, complete previous/next navigation, local inline search and no broken local links/fragments.
-- Python suite reports 36 passed; Playwright reports 49 passed across desktop, laptop, mobile, 200% reflow, no-script and axe cases.
+- Python and Playwright report their actual discovered totals with zero failures across desktop, laptop, mobile, 200% reflow, browser-offline, no-script and axe cases.
 - No tracked source tree, weight, dataset, checkpoint, LFS object, secret, restricted media, absolute local path or full source body exists.
 - The content visibly preserves PyTorch single-card teaching, both environment lanes, CANN 8.5.2 unknown status and all deferred later-plan boundaries.
