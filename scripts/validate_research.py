@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 import sys
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -38,11 +38,21 @@ def read_rows(path: Path, expected_header: list[str], errors: list[str]) -> list
         errors.append(f"missing file: {path}")
         return []
     with path.open(encoding="utf-8", newline="") as handle:
-        reader = csv.DictReader(handle)
-        if reader.fieldnames != expected_header:
-            errors.append(f"{path}: invalid header")
+        try:
+            reader = csv.DictReader(handle, strict=True)
+            if reader.fieldnames != expected_header:
+                errors.append(f"{path}: invalid header")
+                return []
+            rows: list[dict[str, str]] = []
+            for row_number, row in enumerate(reader, start=2):
+                if None in row or any(row.get(field) is None for field in expected_header):
+                    errors.append(f"{path}: row {row_number} has missing or extra fields")
+                    continue
+                rows.append({field: row[field] for field in expected_header})
+            return rows
+        except csv.Error as error:
+            errors.append(f"{path}: malformed CSV: {error}")
             return []
-        return list(reader)
 
 
 def valid_url(value: str) -> bool:
@@ -54,7 +64,7 @@ def validate_research(root: Path) -> list[str]:
     errors: list[str] = []
     research = root / "research"
     sources = read_rows(research / "source-ledger.csv", SOURCE_HEADER, errors)
-    read_rows(research / "search-log.csv", SEARCH_HEADER, errors)
+    searches = read_rows(research / "search-log.csv", SEARCH_HEADER, errors)
     candidates = read_rows(research / "candidates.csv", CANDIDATE_HEADER, errors)
 
     source_ids: set[str] = set()
@@ -85,6 +95,22 @@ def validate_research(root: Path) -> list[str]:
         if not valid_url(row["url"]):
             errors.append(f"{candidate_id}: invalid URL {row['url']}")
 
+        evidence_ids = [
+            source_id.strip()
+            for source_id in row["evidence_ids"].split("|")
+            if source_id.strip()
+        ]
+        if row["status"] in {"audited", "recommended"} and not evidence_ids:
+            errors.append(f"{candidate_id}: {row['status']} candidate requires evidence_ids")
+        if (
+            row["status"] == "rejected"
+            and not evidence_ids
+            and not row["exclusion_reason"].strip()
+        ):
+            errors.append(
+                f"{candidate_id}: rejected candidate requires evidence_ids or exclusion_reason"
+            )
+
         scores: dict[str, int] = {}
         for field, maximum in SCORE_LIMITS.items():
             try:
@@ -104,9 +130,41 @@ def validate_research(root: Path) -> list[str]:
         if total != expected_total:
             errors.append(f"{candidate_id}: total {total} does not equal {expected_total}")
 
-        for source_id in filter(None, row["evidence_ids"].split("|")):
+        for source_id in evidence_ids:
             if source_id not in source_ids:
                 errors.append(f"{candidate_id}: unknown evidence_id {source_id}")
+
+    query_ids: set[str] = set()
+    for row in searches:
+        query_id = row["query_id"]
+        if not query_id.strip() or query_id in query_ids:
+            errors.append(f"duplicate or empty query_id: {query_id}")
+        query_ids.add(query_id)
+
+        try:
+            run_at = datetime.fromisoformat(row["run_at"])
+        except ValueError:
+            run_at = None
+        if run_at is None or run_at.utcoffset() is None:
+            errors.append(
+                f"{query_id}: invalid or timezone-naive run_at {row['run_at']}"
+            )
+
+        try:
+            result_count = int(row["result_count"])
+        except ValueError:
+            result_count = -1
+        if result_count < 0:
+            errors.append(f"{query_id}: invalid result_count {row['result_count']}")
+
+        accepted_ids = [
+            candidate_id.strip()
+            for candidate_id in row["accepted_ids"].split("|")
+            if candidate_id.strip()
+        ]
+        for accepted_id in accepted_ids:
+            if accepted_id not in candidate_ids:
+                errors.append(f"{query_id}: unknown accepted_id {accepted_id}")
 
     return errors
 

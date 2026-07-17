@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Phase 1 reference-project selection
-- Active task: Task 2 — evidence contracts and validator
-- Last verified baseline: Phase 1 Task 2 evidence contracts — real skeleton valid, 3/3 Python unit tests and 39/39 Playwright tests passed; whitespace and no-site-change audits clean on 2026-07-17
+- Active task: Task 2 review remediation complete
+- Last verified baseline: Phase 1 Task 2 review remediation — real skeleton valid, 15/15 Python unit tests passed, and whitespace/no-site-change audits clean on 2026-07-17; Playwright was not rerun because the review prohibited site changes
 
 ## Completed checkpoints
 
@@ -12,6 +12,8 @@
 - Task 1 governance prerequisites satisfied by the existing README, ignore rules, and this implementation log; prior template history is preserved
 - Task 2 evidence contracts established: source ledger, exact-query search log, candidate scoring table, and unified methodology
 - Task 2 standard-library validator established for CSV headers, IDs, enums, URLs, dates, score bounds and totals, and candidate evidence references
+- Task 2 review hard gates established for Ascend 910B scope, evidence-bound environment changes, lifecycle/scale coverage, MindSpeed priority, mature-project admission, and main-versus-satellite roles
+- Task 2 review validator remediation enforces audited/recommended evidence, rejected evidence or reason, search-row integrity, candidate references, and exception-free malformed-row reporting
 - Template visual and interaction specification approved
 - Task 1 complete: fixed-dependency Playwright harness established and verified
 - Task 2 complete: semantic three-column page and local visual system implemented and verified
