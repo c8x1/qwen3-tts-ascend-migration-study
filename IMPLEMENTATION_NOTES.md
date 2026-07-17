@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Phase 1 reference-project selection
-- Active task: Task 4 review remediation verification
-- Last verified baseline: commit `0ab6390` passed the original Task 4 gate, but its saturation claim was superseded during review remediation. The complete 54-cell matrix, six omitted discovery-provenance replays, 18-candidate canonical/mirror and maintenance screening, and two fresh consecutive 9-family native-API passes are now recorded. QRY-104–112 and QRY-113–121 are all successful with `incomplete_results=false` and add zero eligible canonical repositories; fresh final validator/test/audit evidence is pending. Playwright remains prohibited for this research-only task.
+- Active task: Task 4 review remediation complete
+- Last verified baseline: remediation commit `16f3790072a1e923eac3de7ff6a7633e72fa6c44` passed the final research gate: the complete 54-cell matrix, six omitted discovery-provenance replays, 18-candidate canonical/mirror and maintenance screening, and two fresh consecutive 9-family native-API passes are recorded; QRY-104–112 and QRY-113–121 are all successful with `incomplete_results=false` and add zero eligible canonical repositories. The standard validator, all 15 unit tests, required-section scan, matrix/provenance/maintenance/canonical/two-new-pass/count audits, `git diff --check`, no-site, no-weight/data and pycache checks passed. Playwright remained prohibited for this research-only task.
 
 ## Completed checkpoints
 
