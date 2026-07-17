@@ -271,10 +271,13 @@ from __future__ import annotations
 import json
 import hashlib
 import collections
+import csv
 import re
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
 
 ACQUISITION = {
     "qwen3-tts-022e286b": "git-sparse-checkout",
@@ -1550,7 +1553,7 @@ DISPOSITIONS = {"mapped", "excluded", "pending"}
 The core validator loop is mandatory and uses the target index rather than trusting evidence JSON:
 
 ```python
-def validate_evidence(data, registry, target_index, ledger_ids, root):
+def validate_evidence(data, registry, target_index, ledger_ids, root=ROOT):
     errors = validate_against_schema(data, load_target_evidence_schema(), "evidence")
     if errors:
         return errors
@@ -1667,7 +1670,7 @@ Expected: one commit; no HTML or candidate source tree is changed yet.
 
 **Interfaces:**
 - Consumes: source indexes, snapshot registry, evidence records when referenced, and JSON page catalogs matching `Page(slug, title, summary, order, group, objectives, prerequisites, sections)`.
-- Produces: `validate_catalogs(data: object, evidence_ids: set[str]) -> list[str]`, `load_page_catalogs(paths: list[Path]) -> list[dict]`, `relative_href(from_slug: str, to_slug: str) -> str`, `render_page(page, navigation, evidence, search_documents) -> str`, `build_site(output_root: Path, catalog_paths: list[Path]) -> list[Path]`; four foundation pages plus local `search-index.json` in this task.
+- Produces: `validate_catalogs(data: object, evidence_ids: set[str]) -> list[str]`, `load_page_catalogs(paths: list[Path]) -> list[dict]`, `relative_href(from_slug: str, to_slug: str) -> str`, `decision_href(from_slug: str, decision_ref: str) -> str`, `render_page(page, navigation, evidence, search_documents) -> str`, `build_site(output_root: Path, catalog_paths: list[Path]) -> list[Path]`; four foundation pages plus local `search-index.json` in this task.
 
 - [ ] **Step 1: 写入生成器 failing tests**
 
@@ -1680,8 +1683,9 @@ import unittest
 from pathlib import Path
 
 from scripts.phase2_contracts import Evidence
-from scripts.site_builder import (build_search_documents, build_site, load_page_catalogs,
-                                  relative_href, render_page, script_safe_json, validate_catalogs)
+from scripts.site_builder import (build_search_documents, build_site, decision_href,
+                                  load_page_catalogs, relative_href, render_page,
+                                  script_safe_json, validate_catalogs)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -1756,6 +1760,8 @@ class SiteBuilderTest(unittest.TestCase):
 
     def test_relative_href_and_search_anchor_contract(self):
         self.assertEqual(relative_href("target/model.html", "search.html"), "../search.html")
+        self.assertEqual(decision_href("index.html", "research/reference-selection-proposal.md"), "../research/reference-selection-proposal.md")
+        self.assertEqual(decision_href("target/model.html", "research/reference-selection-proposal.md"), "../../research/reference-selection-proposal.md")
         documents = build_search_documents(minimal_catalog()["pages"], fixture_indexes())
         self.assertEqual(documents, sorted(documents, key=lambda row: (row["kind"], row["title"], row["href"])))
         symbol = next(row for row in documents if row["kind"] == "symbol")
@@ -1767,7 +1773,7 @@ class SiteBuilderTest(unittest.TestCase):
         self.assertIn('id="chapter-nav"', html)
         self.assertIn('id="article-content"', html)
         self.assertIn('id="evidence-rail"', html)
-        self.assertIn('href="research/reference-selection-proposal.md"', html)
+        self.assertIn('href="../research/reference-selection-proposal.md"', html)
         self.assertNotIn("<img src=x", html)
         self.assertIn("&lt;img", html)
 ```
@@ -1796,6 +1802,21 @@ Create `research/schemas/page-catalog.schema.json` from this exact contract and 
 Implement the helper contracts without alternate field names:
 
 ```python
+from __future__ import annotations
+
+import hashlib
+import html
+import json
+import posixpath
+from functools import lru_cache
+from pathlib import Path
+
+from scripts.phase2_contracts import (DECISION_REFS, Evidence, load_evidence,
+                                      load_snapshot_registry, validate_against_schema)
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
 @lru_cache(maxsize=1)
 def load_page_catalog_schema() -> dict[str, object]:
     return json.loads((ROOT / "research/schemas/page-catalog.schema.json").read_text(encoding="utf-8"))
@@ -1845,6 +1866,12 @@ def relative_href(from_slug: str, to_slug: str) -> str:
     return posixpath.relpath(to_slug, posixpath.dirname(from_slug) or ".")
 
 
+def decision_href(from_slug: str, decision_ref: str) -> str:
+    if decision_ref not in DECISION_REFS:
+        raise ValueError(f"disallowed decision ref {decision_ref}")
+    return relative_href(from_slug, f"../{decision_ref}")
+
+
 def load_all_indexes(root: Path = ROOT) -> dict[str, dict[str, object]]:
     registry = load_snapshot_registry(root / "research/source-snapshots.json")
     return {snapshot_id: json.loads((root / "research/indexes" / f"{snapshot_id}.json").read_text())
@@ -1885,7 +1912,9 @@ Index-table rendering must put `_anchor(...)` on the exact row that the search `
 
 Create `scripts/site_builder.py` with HTML escaping on every catalog/index value. Reuse the existing DOM contracts exactly: `chapter-nav`, `article-content`, `evidence-rail`, `toggle-left`, `toggle-right`, `site-search`, `chapter-tree`, `page-toc`, evidence cards, drawer buttons and `assets/app.js`. Compute asset/search/nav links with `relative_href(from_slug, to_slug) = posixpath.relpath(to_slug, posixpath.dirname(from_slug) or ".")`; every page search form uses `method="get"`, input name `q`, and `action=relative_href(page["slug"], "search.html")`. Set `aria-current="page"`, generate one `h1`, and emit previous/next links from sorted `order` only when the neighbor exists in loaded catalogs. For index fixed links, text records use line anchors and binary records use the fixed blob URL without an anchor.
 
-`render_page(page, navigation, evidence, search_documents) -> str` follows this complete deterministic algorithm: (1) reject any block evidence ID absent from `evidence`; (2) compute CSS/JS/search/nav links with `relative_href`; (3) render the shared header/search form, `chapter-nav`, `chapter-tree`, `article-content`, one escaped `h1`, objectives/prerequisites, and `page-toc`; (4) dispatch only the five tagged block types, escape every scalar with `html.escape(..., quote=True)`, verify table row widths, and give index rows the same `_anchor` used by search; (5) collect referenced evidence in first-use order and render `evidence-rail` cards with state text, fixed source/ledger links, and escaped internal `decision_refs`; (6) render `toggle-left`/`toggle-right` controls and previous/next navigation; (7) on `search.html`, embed `script_safe_json(search_documents)` in `#search-data` and render the alphabetical no-script page directory; (8) join fixed partials with `\n` and end with exactly one newline. Stable failures are `page <slug>#<section>: unknown evidence <id>`, `block <type>: unsupported`, and `table <section>: row width <n> expected <m>`.
+`render_page(page, navigation, evidence, search_documents) -> str` follows this complete deterministic algorithm: (1) reject any block evidence ID absent from `evidence`; (2) compute CSS/JS/search/nav links with `relative_href`; (3) render the shared header/search form, `chapter-nav`, `chapter-tree`, `article-content`, one escaped `h1`, objectives/prerequisites, and `page-toc`; (4) dispatch only the five tagged block types, escape every scalar with `html.escape(..., quote=True)`, verify table row widths, and give index rows the same `_anchor` used by search; (5) collect referenced evidence in first-use order and render `evidence-rail` cards with state text, fixed source/ledger links, and each allowlisted internal decision path through `decision_href(page["slug"], ref)`—therefore `site/index.html` uses `../research/...` and `site/target/*.html` uses `../../research/...`; (6) render `toggle-left`/`toggle-right` controls and previous/next navigation; (7) on `search.html`, embed `script_safe_json(search_documents)` in `#search-data` and render the alphabetical no-script page directory; (8) join fixed partials with `\n` and end with exactly one newline. Stable failures are `page <slug>#<section>: unknown evidence <id>`, `block <type>: unsupported`, and `table <section>: row width <n> expected <m>`.
+
+Dependency direction is one-way: `site_builder.py` imports data contracts/loaders from `phase2_contracts.py`; `phase2_contracts.py` never imports `site_builder.py` at module import time. The Task 8 fresh-build validator uses a function-local `from scripts.site_builder import build_site` only after both modules are initialized, preventing a circular import.
 
 ```python
 def script_safe_json(data: object) -> str:
@@ -2020,7 +2049,7 @@ Create `content/target-architecture.json` using only renderer block types and th
 | `3 / target/model-architecture.html` | `composite-config` [`TGT-CONFIG-001`]; `speaker-encoder` [`TGT-MODEL-001`]: 24kHz 128-bin mel → embedding; `talker` [`TGT-MODEL-002`]: text+codec → decoder → codec-0 logits; `code-predictor` [`TGT-MODEL-004`]: hidden state/prior codebooks → 15 residual groups; `precision-islands` [`TGT-MODEL-005,TGT-MODEL-006,TGT-MODEL-007`]: RoPE/RMSNorm/attention FP32 ranges; `generation-flow` [`TGT-MODEL-003,TGT-TOK25-011`]: prompt → Talker → MTP → speech tokenizer/generation config; `model-boundary`: static call map only |
 | `4 / target/tokenizer-12hz.html` | `package-tokenizer-registry` [`TGT-PKG-002`]; `configuration` [`TGT-TOK12-002`]: 24kHz, stride 1920, 16 quantizers are verified; `rate-derivation` [`TGT-TOK12-003`]: `24000/1920=12.5 FPS` is separately labeled inference; `encode-contract` and `rvq` [`TGT-TOK12-001`]; `decode-contract` [`TGT-TOK12-001`]; `training-gap`: no public tokenizer training lifecycle in this tree |
 | `5 / target/tokenizer-25hz.html` | `asset-inventory` [`TGT-TOK25-002`]: public executable checkpoint remains pending; `encoder-vq` [`TGT-TOK25-012,TGT-TOK25-013`]; `campplus-dependency` [`TGT-TOK25-003`]; `speech-vq-dependencies` [`TGT-TOK25-004,TGT-TOK25-005`]; `whisper-attention` [`TGT-TOK25-006,TGT-TOK25-007`]; `vq-core` [`TGT-TOK25-009,TGT-TOK25-010`]; `dit-bigvgan` [`TGT-TOK25-001`]; `decoder-precision` [`TGT-TOK25-008`]; `main-model-assets` [`TGT-TOK25-011`]; `asset-boundary`: split verified dependency/code facts from pending execution/public checkpoint |
-| `6 / target/processor-contracts.html` | `text-contract`: Qwen tokenizer/ChatML/BatchFeature; `audio-wrapper`: normalize URL/path/base64/array then encode/decode; `shape-contract`: text ids, `(T,16)` 12Hz codes, sample-rate/downsample metadata; `prompt-contract`: x-vector-only versus ICL text+audio; `migration-boundary`: no Ascend claim |
+| `6 / target/processor-contracts.html` | `text-contract` [`TGT-PROC-001`]: Qwen tokenizer/ChatML/BatchFeature; `audio-wrapper` [`TGT-PROC-002`]: normalize URL/path/base64/array then encode/decode; `shape-contract` [`TGT-PROC-001,TGT-PROC-002`]: text ids, `(T,16)` 12Hz codes, sample-rate/downsample metadata; `prompt-contract` [`TGT-PROC-001,TGT-PROC-002`]: x-vector-only versus ICL text+audio; `migration-boundary`: no Ascend claim |
 
 Each page must contain: one learning objective list; prerequisite `熟悉 PyTorch 单卡张量与自回归生成`; every bracketed evidence ID above in its named section; at least one `call_chain` whose items name the exact symbols/path sequence stated above; a source table with exact target paths; a status/boundary section. Tests assert the exact section-ID set per page, every page evidence ID resolves, and each required call-chain label appears in order. The 25Hz page must visibly show both `已证实：静态依赖与源码路径` and `待真机验证：公开可执行性 unknown`; it must not collapse all VQ files under generic model evidence. All CUDA/BF16/FA2/FP32 teaching is descriptive of target defaults/precision only and contains no migration mapping.
 
@@ -2164,10 +2193,11 @@ Append these complete mutation helpers/tests; every test starts from a fresh gen
 ```python
 import copy
 import csv
+import shutil
 import tempfile
 
-from scripts.phase2_contracts import (load_evidence, validate_cross_contracts,
-                                      validate_generated_site)
+from scripts.phase2_contracts import (DECISION_REFS, load_evidence,
+                                      validate_cross_contracts, validate_generated_site)
 from scripts.site_builder import build_site, load_page_catalogs
 
 
@@ -2181,10 +2211,37 @@ def full_inputs():
 
 def generated_copy():
     context = tempfile.TemporaryDirectory()
-    root = Path(context.name)
+    workspace = Path(context.name)
+    root = workspace / "site"
     catalogs, pages, evidence, coverage = full_inputs()
     build_site(root, catalogs)
+    for name in ("app.js", "theme.css", "layout.css"):
+        destination = root / "assets" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / "site" / "assets" / name, destination)
+    for ref in DECISION_REFS:
+        destination = workspace / ref
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / ref, destination)
     return context, root, pages, evidence, coverage
+
+
+def drop_page_evidence(pages, evidence_id):
+    mutated = copy.deepcopy(pages)
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "evidence_ids":
+                    value[key] = [item for item in child if item != evidence_id]
+                else:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(mutated)
+    return mutated
 
 
 class GeneratedSiteContractTest(unittest.TestCase):
@@ -2199,6 +2256,17 @@ class GeneratedSiteContractTest(unittest.TestCase):
         self.assertIn("index.html: aria-controls missing-node has no matching id", errors)
         self.assertIn("index.html: remote runtime resource https://example.com/x.js", errors)
 
+    def test_only_allowlisted_decision_links_may_leave_site_root(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        errors = validate_generated_site(root, pages, evidence, coverage)
+        self.assertFalse(any("reference-selection-proposal.md" in error for error in errors))
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(html.replace("</main>", '<a href="../IMPLEMENTATION_NOTES.md">escape</a></main>'), encoding="utf-8")
+        self.assertIn("index.html: local link escapes site ../IMPLEMENTATION_NOTES.md",
+                      validate_generated_site(root, pages, evidence, coverage))
+
     def test_coverage_catalog_evidence_and_important_bridge_mutations(self):
         _, pages, evidence, coverage = full_inputs()
         missing_path = [row for row in coverage if row["path"] != "qwen_tts/inference/qwen3_tts_model.py"]
@@ -2212,8 +2280,8 @@ class GeneratedSiteContractTest(unittest.TestCase):
         bad_pages[2]["sections"][0]["blocks"][0]["evidence_ids"] = ["TGT-NOT-REAL"]
         errors = validate_cross_contracts(bad_pages, evidence, coverage)
         self.assertTrue(any("unknown evidence TGT-NOT-REAL" in error for error in errors))
-        without_lane = {key: value for key, value in evidence.items() if key != "PH1-ENV-LANES"}
-        errors = validate_cross_contracts(pages, without_lane, coverage)
+        without_lane = drop_page_evidence(pages, "PH1-ENV-LANES")
+        errors = validate_cross_contracts(without_lane, evidence, coverage)
         self.assertIn("important evidence PH1-ENV-LANES: not referenced by any page", errors)
 
     def test_unexpected_generated_output_is_rejected(self):
@@ -2241,7 +2309,137 @@ def actual_generated_outputs(site_root: Path) -> set[str]:
     return html | ({"assets/search-index.json"} if search.is_file() else set())
 ```
 
-`validate_cross_contracts` loads the target index through `load_all_indexes()["qwen3-tts-022e286b"]`, compares its 35 paths to the coverage multiset, then builds `catalog = {slug: {section_id}}` and `known_evidence = set(evidence)`. For every mapped/pending coverage row it requires the referenced page and section to exist; for every block it requires its evidence IDs to exist; it requires every evidence ID used by coverage to be referenced by its destination section; and it requires `TGT-SCOPE-002`, `TGT-TOK25-002`, `PH1-ROLE-MM`, `PH1-ROLE-LLM`, `PH1-ROLE-MOSS`, and `PH1-ENV-LANES` to appear in at least one page. This is the final page/section/evidence/ledger bridge; exact stable error strings are those asserted in Step 1.
+Use these exact catalog inputs for production and for the fresh deterministic rebuild. The optional argument keeps the four-argument public call valid while making the fresh-build dependency explicit and injectable in tests:
+
+```python
+PHASE2_CATALOG_PATHS = (
+    ROOT / "content/site-foundation.json",
+    ROOT / "content/target-architecture.json",
+    ROOT / "content/target-training.json",
+)
+
+
+def _block_evidence_ids(block):
+    yield from block.get("evidence_ids", [])
+    for item in block.get("items", []):
+        yield from item.get("evidence_ids", [])
+
+
+def validate_cross_contracts(pages, evidence, coverage) -> list[str]:
+    errors = []
+    known_evidence = set(evidence)
+    catalog = {page["slug"]: {section["id"]: section for section in page["sections"]}
+               for page in pages}
+    section_evidence = {}
+    page_evidence = set()
+
+    # 1. Validate page references first and derive references from pages, not
+    #    from the evidence dictionary, so an important-ID omission is observable.
+    for page in pages:
+        for section in page["sections"]:
+            refs = {evidence_id for block in section["blocks"]
+                    for evidence_id in _block_evidence_ids(block)}
+            section_evidence[(page["slug"], section["id"])] = refs
+            page_evidence.update(refs)
+            for evidence_id in sorted(refs - known_evidence):
+                errors.append(f"page {page['slug']}#{section['id']}: unknown evidence {evidence_id}")
+
+    # 2. Compare the coverage path multiset with the fixed target-index multiset.
+    target = load_all_indexes()["qwen3-tts-022e286b"]
+    target_paths = collections.Counter(row["path"] for row in target["files"])
+    coverage_paths = collections.Counter(row["path"] for row in coverage)
+    for path in sorted((target_paths - coverage_paths).elements()):
+        errors.append(f"target coverage: missing {path}")
+    for path in sorted((coverage_paths - target_paths).elements()):
+        errors.append(f"target coverage: unexpected {path}")
+
+    # 3. Bridge each mapped/pending ledger row to its page, section and evidence.
+    for row in coverage:
+        if row["disposition"] not in {"mapped", "pending"}:
+            continue
+        destination = (row["page"], row["section"])
+        if row["page"] not in catalog or row["section"] not in catalog[row["page"]]:
+            errors.append(f"coverage {row['path']}: missing section {row['page']}#{row['section']}")
+            continue
+        for evidence_id in filter(None, row["evidence_ids"].split("|")):
+            if evidence_id not in known_evidence:
+                errors.append(f"coverage {row['path']}: unknown evidence {evidence_id}")
+            elif evidence_id not in section_evidence[destination]:
+                errors.append(f"coverage {row['path']}: evidence {evidence_id} absent from {row['page']}#{row['section']}")
+
+    # 4. Evaluate important IDs last, against the page-derived union computed in
+    #    phase 1. Deleting an Evidence record must not masquerade as a page omission.
+    important = {"TGT-SCOPE-002", "TGT-TOK25-002", "PH1-ROLE-MM",
+                 "PH1-ROLE-LLM", "PH1-ROLE-MOSS", "PH1-ENV-LANES"}
+    for evidence_id in sorted(important - page_evidence):
+        errors.append(f"important evidence {evidence_id}: not referenced by any page")
+    return errors
+```
+
+Local-link validation uses `urllib.parse.urlsplit`, strips query/fragment only for filesystem resolution, and checks fragments against the parsed target page IDs. A local target may leave `site_root` only when its resolved path equals one of the two allowlisted decision files below and that file exists. Prefix matches, sibling files under `research/`, and every other `..` escape are rejected:
+
+```python
+def _resolve_local_target(site_root: Path, page_path: Path, href: str):
+    parsed = urllib.parse.urlsplit(href)
+    candidate = (page_path.parent / urllib.parse.unquote(parsed.path)).resolve()
+    resolved_site = site_root.resolve()
+    allowed = {(site_root.parent / ref).resolve() for ref in DECISION_REFS}
+    if not candidate.is_relative_to(resolved_site):
+        if candidate not in allowed:
+            return None, f"{page_path.relative_to(site_root).as_posix()}: local link escapes site {href}"
+        if not candidate.is_file():
+            return None, f"{page_path.relative_to(site_root).as_posix()}: broken local link {href}"
+    elif not candidate.is_file():
+        return None, f"{page_path.relative_to(site_root).as_posix()}: broken local link {href}"
+    return candidate, None
+
+
+def validate_generated_site(site_root, pages, evidence, coverage,
+                            catalog_paths=PHASE2_CATALOG_PATHS) -> list[str]:
+    errors = validate_cross_contracts(pages, evidence, coverage)
+    expected = expected_generated_outputs(pages)
+    actual = actual_generated_outputs(site_root)
+    for relative in sorted(expected - actual):
+        errors.append(f"site: missing generated output {relative}")
+    for relative in sorted(actual - expected):
+        errors.append(f"site: unexpected generated output {relative}")
+
+    parsed_pages = {}
+    for relative in sorted(expected & actual):
+        if not relative.endswith(".html"):
+            continue
+        path = site_root / relative
+        parsed = parse_html(path)  # stdlib HTMLParser collector described above
+        parsed_pages[path.resolve()] = parsed
+        errors.extend(validate_document_structure(relative, parsed, evidence))
+
+    for source_path, parsed in parsed_pages.items():
+        for link in parsed.local_links:  # href, form action and same-site runtime URLs
+            target, error = _resolve_local_target(site_root, source_path, link.url)
+            if error:
+                errors.append(error)
+                continue
+            if link.fragment and target.suffix == ".html":
+                target_doc = parsed_pages.get(target) or parse_html(target)
+                if link.fragment not in target_doc.ids:
+                    errors.append(f"{source_path.relative_to(site_root).as_posix()}: broken fragment {link.url}")
+        errors.extend(validate_aria_references(source_path, parsed))
+        errors.extend(validate_remote_resources(source_path, parsed))
+
+    # Compare only the declared generated domain. build_site is imported here,
+    # never at phase2_contracts module import time, preserving one-way imports.
+    with tempfile.TemporaryDirectory() as tmp:
+        from scripts.site_builder import build_site
+        fresh_root = Path(tmp) / "site"
+        build_site(fresh_root, list(catalog_paths))
+        for relative in sorted(expected):
+            current, fresh = site_root / relative, fresh_root / relative
+            if current.is_file() and fresh.is_file() and current.read_bytes() != fresh.read_bytes():
+                errors.append(f"site: generated output differs {relative}")
+    return errors
+```
+
+`validate_document_structure` performs the one-h1, non-skipping heading, four-state evidence-status and runtime-resource checks. `validate_remote_resources` rejects every remote script, stylesheet, font, image and search-data URL; only anchor citations with an `https` scheme are accepted. `validate_aria_references` checks every token in every `aria-controls` value against IDs in the same document. Exact stable mutation errors are those asserted in Step 1.
 
 Extend `validate_phase2.py` success output to exactly:
 
@@ -2341,6 +2539,7 @@ test('mobile coverage drawers remain accessible', async ({ page }) => {
   await page.goto('/site/target/coverage-gaps.html');
   await page.locator('#toggle-left').click();
   await expect(page.locator('#chapter-nav')).toBeVisible();
+  await expectNoAxeViolations(page);
   await page.locator('#toggle-left').click();
   await page.locator('#toggle-right').click();
   await expect(page.locator('#evidence-rail')).toBeVisible();
@@ -2360,8 +2559,9 @@ test('JavaScript-disabled site retains article evidence and static directory', a
 });
 
 test('720 CSS pixels at 200 percent has no document overflow', async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 800 });
+  await page.setViewportSize({ width: 720, height: 800 });
   await page.goto('/site/target/coverage-gaps.html');
+  await expect(page.locator('.table-scroll')).not.toHaveCount(0);
   const metrics = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
     tableScrollable: [...document.querySelectorAll('.table-scroll')].every((node) => node.scrollWidth >= node.clientWidth) }));
   expect(metrics.scroll).toBeLessThanOrEqual(metrics.client);
