@@ -1,0 +1,16 @@
+{
+  "name": "qwen3-tts-ascend-migration-study",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "python3 -m http.server 4173",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:update-snapshots": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.12.1",
+    "@playwright/test": "1.61.1"
+  }
+}
