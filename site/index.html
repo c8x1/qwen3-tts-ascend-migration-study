@@ -16,8 +16,11 @@
   </header>
 
   <div class="site-shell">
-    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+    <div class="sidebar-controls">
       <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
       <div class="rail-icons" aria-hidden="true"><span>⌂</span><span>▤</span><span>⌘</span><span>↔</span></div>
       <div class="sidebar-content">
         <p class="nav-label">学习路径</p>
@@ -69,7 +72,6 @@
     </main>
 
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
-      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
       <div class="rail-icons" aria-hidden="true"><span>§</span><span>✓</span><span>⚠</span><span>↗</span></div>
       <div class="sidebar-content">
         <section class="rail-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>

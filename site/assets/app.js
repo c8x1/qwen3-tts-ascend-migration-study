@@ -35,14 +35,13 @@ export class SidebarController {
   }
 
   read(side) {
+    const memoryValue = this.memory.get(side);
+    if (VALID.has(memoryValue)) return memoryValue;
     try {
       const value = this.window.localStorage.getItem(STORAGE_KEYS[side]);
       if (VALID.has(value)) return value;
       if (value !== null) this.window.localStorage.removeItem(STORAGE_KEYS[side]);
-    } catch {
-      const value = this.memory.get(side);
-      if (VALID.has(value)) return value;
-    }
+    } catch {}
     return this.defaultState(side);
   }
 
@@ -57,14 +56,28 @@ export class SidebarController {
 
   apply(side, value) {
     this.root.dataset[`${side}Sidebar`] = value;
-    const expanded = value === 'expanded';
+    this.syncToggle(side);
+  }
+
+  syncToggle(side) {
+    const mobile = this.mode() === 'mobile';
+    const expanded = mobile
+      ? this.root.dataset.drawerOpen === side
+      : this.root.dataset[`${side}Sidebar`] === 'expanded';
+    const action = expanded ? (mobile ? '关闭' : '收起') : (mobile ? '打开' : '展开');
     this.toggles[side].setAttribute('aria-expanded', String(expanded));
-    this.toggles[side].setAttribute('aria-label', `${expanded ? '收起' : '展开'}${side === 'left' ? '章节导航' : '证据栏'}`);
+    this.toggles[side].setAttribute('aria-label', `${action}${side === 'left' ? '章节导航' : '证据栏'}`);
+  }
+
+  syncToggles() {
+    this.syncToggle('left');
+    this.syncToggle('right');
   }
 
   toggle(side) {
     if (this.mode() === 'mobile') {
-      this.openDrawer(side, this.toggles[side]);
+      if (this.root.dataset.drawerOpen === side) this.closeDrawer();
+      else this.openDrawer(side, this.toggles[side]);
       return;
     }
     const current = this.root.dataset[`${side}Sidebar`];
@@ -82,7 +95,7 @@ export class SidebarController {
     this.sidebars.right.inert = side !== 'right';
     this.sidebars[side].setAttribute('role', 'dialog');
     this.sidebars[side].setAttribute('aria-modal', 'true');
-    this.toggles[side].setAttribute('aria-expanded', 'true');
+    this.syncToggles();
     const target = this.sidebars[side].querySelector('a, button, input, [tabindex]:not([tabindex="-1"])');
     target?.focus();
   }
@@ -91,6 +104,7 @@ export class SidebarController {
     const side = this.root.dataset.drawerOpen;
     if (!side) {
       this.backdrop.hidden = true;
+      this.syncToggles();
       return;
     }
     delete this.root.dataset.drawerOpen;
@@ -101,7 +115,7 @@ export class SidebarController {
       this.sidebars.left.inert = true;
       this.sidebars.right.inert = true;
     }
-    this.toggles[side].setAttribute('aria-expanded', 'false');
+    this.syncToggles();
     if (restoreFocus) this.lastTrigger?.focus();
   }
 
@@ -134,8 +148,7 @@ export class SidebarController {
       this.closeDrawer(false);
       this.sidebars.left.inert = true;
       this.sidebars.right.inert = true;
-      this.toggles.left.setAttribute('aria-expanded', 'false');
-      this.toggles.right.setAttribute('aria-expanded', 'false');
+      this.syncToggles();
       return;
     }
     this.closeDrawer(false);
