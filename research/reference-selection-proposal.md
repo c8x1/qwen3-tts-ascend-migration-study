@@ -18,7 +18,7 @@ CAND-004 仍为已审计的 optional comparison，未被选入固定清单。用
 
 ## 1. Executive recommendation
 
-**建议用户批准、也可明确否决的默认路线是 exact-TTS-led 组合：**以 **CAND-001 Ascend/MindSpeed-MM** 的固定官方 GitHub mirror 快照 `0edd553e0ac9c912fe422c42cc9f42db9255ddcf`（**81/100**）为 main implementation anchor；以 **CAND-002 Ascend/MindSpeed-LLM** 的固定快照 `434baff794bd5594ebc9ed8a5b399110da9a44f0`（**79/100**）为 training-scale satellite；以 **CAND-003 OpenMOSS/MOSS-TTS** `ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af`（**59/100**）为 speech/codec satellite。**CAND-004 CosyVoice** `074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc`（**49/100**）只作可选的 data/training/eval/export 次级对照，不是必须获取或 vendor 的主卫星。[SRC-019][SRC-026][SRC-030][SRC-032]
+**用户已于 2026-07-17 批准默认的 exact-TTS-led 组合：**以 **CAND-001 Ascend/MindSpeed-MM** 的固定官方 GitHub mirror 快照 `0edd553e0ac9c912fe422c42cc9f42db9255ddcf`（**81/100**）为 main implementation anchor；以 **CAND-002 Ascend/MindSpeed-LLM** 的固定快照 `434baff794bd5594ebc9ed8a5b399110da9a44f0`（**79/100**）为 training-scale satellite；以 **CAND-003 OpenMOSS/MOSS-TTS** `ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af`（**59/100**）为 speech/codec satellite。**CAND-004 CosyVoice** `074ca6dc9e80a2f424f1f74b48bdd7d3fea531cc`（**49/100**）只作可选的 data/training/eval/export 次级对照，不是必须获取或 vendor 的主卫星。[SRC-019][SRC-026][SRC-030][SRC-032]
 
 精确结论是：**存在 exact public Qwen3-TTS→Ascend 的 12Hz Base speaker-SFT 参考，即 MindSpeed-MM；但没有可验证的 exact full-lifecycle 项目同时覆盖 Qwen3-TTS S1/S2/S3 pretrain、tokenizer training、DPO/GSPO、fixed executable eval、CANN 8.5.2、candidate-specific multi-node run/resume。**官方 Qwen3-TTS 固定树本身只公开 12Hz Base 到单说话人 CustomVoice 的 SFT 示例；MindSpeed-MM 补上 exact NPU/FSDP2 训练链，却仍没有上述完整阶段和目标环境运行证据。因此，这个组合是当前公开证据下最接近、可辩护且缺口可见的参考；它既不等于“完全没有 exact 项目”，也不等于“已有完整迁移”。[SRC-001][SRC-003][SRC-019][SRC-020][SRC-021][SRC-022][SRC-043][SRC-066]
 
@@ -26,7 +26,7 @@ CAND-004 仍为已审计的 optional comparison，未被选入固定清单。用
 
 ## 2. Ranked audited candidates and final scores
 
-| Rank | Candidate and fixed revision | Ascend /30 | Architecture /25 | Scale /20 | Repro /15 | Docs/license /10 | Final | Proposed role |
+| Rank | Candidate and fixed revision | Ascend /30 | Architecture /25 | Scale /20 | Repro /15 | Docs/license /10 | Final | Approved role |
 | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | 1 | CAND-001 MindSpeed-MM `0edd553e0ac9c912fe422c42cc9f42db9255ddcf` | 27 | 24 | 13 | 11 | 6 | **81** | main implementation anchor |
 | 2 | CAND-002 MindSpeed-LLM `434baff794bd5594ebc9ed8a5b399110da9a44f0` | 29 | 10 | 19 | 14 | 7 | **79** | training-scale satellite |
