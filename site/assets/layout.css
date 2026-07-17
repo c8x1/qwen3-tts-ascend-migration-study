@@ -26,7 +26,8 @@ html[data-left-sidebar="collapsed"][data-right-sidebar="collapsed"] .site-shell 
 
 @media (max-width: 1199px) {
   .site-header { grid-template-columns: 13rem minmax(14rem, 1fr) 6rem; }
-  .site-shell { grid-template-columns: 13rem minmax(0, 1fr) 2.5rem; }
+  .site-shell { grid-template-columns: 13rem minmax(0, 1fr) 15.3125rem; }
+  html.js .site-shell { grid-template-columns: 13rem minmax(0, 1fr) 2.5rem; }
   html[data-right-sidebar="expanded"] .site-shell { grid-template-columns: 13rem minmax(0, 1fr) 15.3125rem; }
   html[data-left-sidebar="collapsed"] .site-shell { grid-template-columns: 2.5rem minmax(0, 1fr) 2.5rem; }
   html[data-left-sidebar="collapsed"][data-right-sidebar="expanded"] .site-shell { grid-template-columns: 2.5rem minmax(0, 1fr) 15.3125rem; }

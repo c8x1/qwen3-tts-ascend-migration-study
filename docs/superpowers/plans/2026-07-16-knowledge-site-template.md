@@ -563,7 +563,7 @@ Run:
 npm test -- tests/site/template-structure.spec.js
 ```
 
-Expected: 4 tests passed.
+Expected: 5 tests passed.
 
 - [ ] **Step 7: 更新 notes 并提交推送**
 
@@ -852,7 +852,7 @@ Run:
 npm test -- tests/site/template-structure.spec.js tests/site/sidebar-behavior.spec.js
 ```
 
-Expected: 9 tests passed.
+Expected: 10 tests passed.
 
 - [ ] **Step 6: 更新 notes 并提交推送**
 
@@ -1012,7 +1012,7 @@ git status --short
 git ls-files | rg '(^|/)(\.env|models|weights|datasets|checkpoints)/|\.(pem|key)$' && exit 1 || true
 ```
 
-Expected: 19 tests passed; whitespace check is clean; only intended template, tests, notes, README, package and snapshot files are changed; restricted-path audit finds nothing.
+Expected: 20 tests passed; whitespace check is clean; only intended template, tests, notes, README, package and snapshot files are changed; restricted-path audit finds nothing.
 
 - [ ] **Step 6: 完成 README 与 notes**
 
@@ -1054,7 +1054,7 @@ git ls-remote origin refs/heads/agent/knowledge-site-template
 
 Required evidence:
 
-- 19 Playwright tests pass.
+- 20 Playwright tests pass.
 - Desktop, laptop and mobile screenshots match tracked baselines.
 - Local `agent/knowledge-site-template` is clean and equals its remote branch.
 - No remote runtime resources, secrets, model weights, datasets or checkpoints are tracked.

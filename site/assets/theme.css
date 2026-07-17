@@ -44,7 +44,7 @@ pre { margin: 0; padding: 1rem; overflow-x: auto; border-radius: 0 0 .55rem .55r
 .kw { color: #ef8f78; } .fn { color: #e6c982; } .str { color: #a9d38b; } .cm { color: #9da79f; }
 .nav-label { margin: 1rem .55rem .4rem; color: var(--gold); font-size: .65rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .chapter-nav a { display: block; margin: .12rem 0; padding: .55rem .65rem; border-radius: .45rem; color: #67594a; font-size: .82rem; text-decoration: none; }
-.chapter-nav a.active { color: #fffaf2; background: var(--accent); }
+.chapter-nav a.active { padding-inline-start: .4rem; border-inline-start: .25rem solid #fffaf2; color: #fffaf2; background: var(--accent); }
 .chapter-nav a.sub { padding-left: 1.35rem; font-size: .76rem; }
 .rail-card { margin-bottom: .75rem; padding: .85rem; border: 1px solid #cfbfa9; border-radius: .55rem; background: #faf6ef; }
 .rail-card h2 { font-size: .9rem; }
