@@ -1,0 +1,57 @@
+:root {
+  --canvas: #f7f1e7;
+  --header: #e8ddcd;
+  --left-bg: #eee5d8;
+  --article-bg: #fcf9f3;
+  --right-bg: #f1e8dc;
+  --ink: #2b251f;
+  --muted: #675a4d;
+  --accent: #934735;
+  --gold: #9b6c29;
+  --border: #cdbda7;
+  --code-bg: #22211e;
+  --code-ink: #f3eee4;
+  color-scheme: light;
+  font-family: ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; background: var(--canvas); color: var(--ink); }
+button, input { font: inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid #1f6f8b; outline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+.brand { font-family: ui-serif, "Songti SC", Georgia, serif; font-size: 1rem; font-weight: 700; }
+.brand small { display: block; margin-top: .15rem; color: var(--accent); font-family: ui-sans-serif, system-ui, sans-serif; font-size: .58rem; letter-spacing: .14em; text-transform: uppercase; }
+.search input { width: min(32rem, 100%); padding: .65rem .85rem; border: 1px solid #bfae97; border-radius: .55rem; color: var(--ink); background: #f8f3eb; }
+.revision, .breadcrumb { color: var(--muted); font-size: .75rem; }
+h1, h2 { font-family: ui-serif, "Songti SC", Georgia, serif; color: #29221c; }
+h1 { margin: .65rem 0 .75rem; font-size: clamp(1.5rem, 3vw, 1.9rem); line-height: 1.2; }
+h2 { margin: 0 0 .65rem; font-size: 1.2rem; }
+p { line-height: 1.7; }
+.lead { max-width: 48rem; margin-bottom: 1.2rem; color: var(--muted); font-family: ui-serif, "Songti SC", Georgia, serif; font-size: 1rem; }
+.badge { display: inline-block; margin: 0 .35rem .4rem 0; padding: .28rem .55rem; border: 1px solid; border-radius: 999px; font-size: .72rem; font-weight: 700; }
+.verified { color: #315b42; background: #dfeade; border-color: #a9c3ad; }
+.ascend { color: #713a2e; background: #f0dcd4; border-color: #d7ab9f; }
+.pending { color: #6b511d; background: #f4e8c6; border-color: #d9c17c; }
+article section { margin-top: 1.6rem; padding-top: 1.3rem; border-top: 1px solid #ddd0bf; }
+.call-chain { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .8rem 0; }
+.call-chain code { padding: .5rem .65rem; border: 1px solid #ccbba4; border-radius: .45rem; color: #54483d; background: #f1e7d9; }
+.call-chain span { color: var(--accent); font-weight: 800; }
+.code-header { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem .8rem; border-bottom: 1px solid #4b4740; border-radius: .55rem .55rem 0 0; color: #b6aa97; background: #302e29; font-size: .72rem; }
+pre { margin: 0; padding: 1rem; overflow-x: auto; border-radius: 0 0 .55rem .55rem; color: var(--code-ink); background: var(--code-bg); font: .8rem/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.kw { color: #ef8f78; } .fn { color: #e6c982; } .str { color: #a9d38b; } .cm { color: #9da79f; }
+.nav-label { margin: 1rem .55rem .4rem; color: var(--gold); font-size: .65rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.chapter-nav a { display: block; margin: .12rem 0; padding: .55rem .65rem; border-radius: .45rem; color: #67594a; font-size: .82rem; text-decoration: none; }
+.chapter-nav a.active { color: #fffaf2; background: var(--accent); }
+.chapter-nav a.sub { padding-left: 1.35rem; font-size: .76rem; }
+.rail-card { margin-bottom: .75rem; padding: .85rem; border: 1px solid #cfbfa9; border-radius: .55rem; background: #faf6ef; }
+.rail-card h2 { font-size: .9rem; }
+.rail-card p, .rail-card a { display: block; margin: .2rem 0; color: #665747; font-size: .75rem; line-height: 1.6; }
+.sidebar-toggle, .drawer-close { border: 1px solid #bba88f; border-radius: .4rem; color: #6d5948; background: #f9f4ec; cursor: pointer; }
+.sidebar-toggle { position: absolute; top: .75rem; width: 1.8rem; height: 1.8rem; }
+.left-toggle { right: .65rem; } .right-toggle { left: .65rem; }
+.rail-icons { display: none; flex-direction: column; align-items: center; gap: 1rem; padding-top: 3.2rem; color: #704335; }
+.drawer-close { display: none; width: 100%; margin-top: 1rem; padding: .65rem; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

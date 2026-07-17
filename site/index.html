@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Qwen3-TTS 到 Ascend 910B 训练迁移知识站模板">
+  <title>HCCL 并行初始化调用链 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="assets/theme.css">
+  <link rel="stylesheet" href="assets/layout.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">Qwen3-TTS × Ascend <small>Migration Field Notes</small></div>
+    <label class="search"><span class="sr-only">搜索</span><input type="search" placeholder="搜索文件、类、配置项、证据编号"></label>
+    <div class="revision">主参考项目 · commit 8f21c4a</div>
+  </header>
+
+  <div class="site-shell">
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <div class="rail-icons" aria-hidden="true"><span>⌂</span><span>▤</span><span>⌘</span><span>↔</span></div>
+      <div class="sidebar-content">
+        <p class="nav-label">学习路径</p>
+        <a href="#">01 · 项目与证据</a><a href="#">02 · Ascend 基础</a>
+        <p class="nav-label">源码走读</p>
+        <a href="#">03 · 训练入口</a><a class="active" href="#">04 · 分布式初始化</a>
+        <a class="sub" href="#call-chain">4.1 设备绑定</a><a class="sub" href="#source">4.2 HCCL 通信域</a><a class="sub" href="#verification">4.3 模型并行状态</a>
+        <a href="#">05 · 数据流水线</a><a href="#">06 · 模型与 Loss</a><a href="#">07 · Checkpoint</a>
+        <p class="nav-label">迁移映射</p>
+        <a href="#">NVIDIA → Ascend</a><a href="#">未来实验清单</a>
+      </div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">源码走读 / 分布式初始化 / HCCL</p>
+        <h1>HCCL 并行初始化调用链</h1>
+        <p class="lead">从训练入口开始，沿着 MindSpeed 注册、设备绑定和通信域建立过程，理解多机训练真正启动前发生了什么。</p>
+        <div class="badges"><span class="badge verified">已证实 · S 级</span><span class="badge ascend">Ascend 910B</span><span class="badge pending">性能待真机验证</span></div>
+
+        <section id="call-chain">
+          <h2>1. 调用链位置</h2>
+          <div class="call-chain" aria-label="初始化调用链"><code>pretrain.py</code><span>→</span><code>initialize_megatron()</code><span>→</span><code>initialize_distributed()</code><span>→</span><code>parallel_state</code></div>
+          <p>这一层同时决定当前进程绑定哪张 NPU、默认进程组使用什么后端，以及 TP、PP、CP 通信组如何切分。</p>
+        </section>
+
+        <section id="source">
+          <h2>2. 关键源码</h2>
+          <div class="code-header"><span>mindspeed/training/initialize.py · L142</span><span>复制 · GitHub ↗</span></div>
+          <pre><code><span class="kw">def</span> <span class="fn">initialize_distributed</span>(args):
+    <span class="cm"># 先绑定本地设备，再创建默认通信域</span>
+    torch_npu.npu.set_device(args.local_rank)
+    dist.init_process_group(
+        backend=<span class="str">"hccl"</span>,
+        world_size=args.world_size,
+        rank=args.rank,
+    )
+    parallel_state.initialize_model_parallel(
+        tensor_model_parallel_size=args.tensor_parallel_size
+    )</code></pre>
+        </section>
+
+        <section id="verification">
+          <h2>3. 验证方法</h2>
+          <p>先检查每个进程的设备绑定和全局 rank，再验证默认 HCCL 进程组以及模型并行通信组的成员关系。</p>
+        </section>
+      </article>
+    </main>
+
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+      <div class="rail-icons" aria-hidden="true"><span>§</span><span>✓</span><span>⚠</span><span>↗</span></div>
+      <div class="sidebar-content">
+        <section class="rail-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>
+        <section class="rail-card"><h2>证据状态</h2><p>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
+        <section class="rail-card"><h2>迁移提醒</h2><p>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
+      </div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+</body>
+</html>
