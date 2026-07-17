@@ -14,13 +14,13 @@ article { max-width: 57.5rem; margin: 0 auto; padding: 2.2rem 2.75rem 3rem; }
 .drawer-backdrop { display: none; }
 
 html[data-left-sidebar="collapsed"] .site-shell { grid-template-columns: 2.5rem minmax(0, 1fr) 15.3125rem; }
-html[data-left-sidebar="collapsed"] .chapter-nav { padding-inline: 0; overflow: hidden; }
+html[data-left-sidebar="collapsed"] .chapter-nav { padding-inline: 0; overflow: visible; }
 html[data-left-sidebar="collapsed"] .chapter-nav .sidebar-content { display: none; }
 html[data-left-sidebar="collapsed"] .chapter-nav .rail-icons { display: flex; }
 html[data-left-sidebar="collapsed"] .left-toggle { margin-right: .35rem; transform: rotate(180deg); }
 
 html[data-right-sidebar="collapsed"] .site-shell { grid-template-columns: 15rem minmax(0, 1fr) 2.5rem; }
-html[data-right-sidebar="collapsed"] .evidence-rail { padding-inline: 0; overflow: hidden; }
+html[data-right-sidebar="collapsed"] .evidence-rail { padding-inline: 0; overflow: visible; }
 html[data-right-sidebar="collapsed"] .evidence-rail .sidebar-content { display: none; }
 html[data-right-sidebar="collapsed"] .evidence-rail .rail-icons { display: flex; }
 html[data-right-sidebar="collapsed"] .right-toggle { margin-left: .35rem; transform: rotate(180deg); }

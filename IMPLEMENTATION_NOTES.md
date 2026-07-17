@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Knowledge-site template
-- Active task: Whole-branch review remediation complete
-- Last verified baseline: Whole-branch review remediation — 37/37 Playwright tests passed on 2026-07-17
+- Active task: Second whole-branch review remediation complete
+- Last verified baseline: Second whole-branch review remediation — 38/38 Playwright tests passed on 2026-07-17
 
 ## Completed checkpoints
 
@@ -32,6 +32,10 @@
 - Restricted-path audit expression corrected to match standalone `.env`, `.env.*`, restricted directories at any depth, and `.pem`/`.key` files
 - Whole-branch completion verification: 37/37 Playwright tests passed; all three regenerated Chromium/Darwin snapshots passed zero-diff revalidation and were inspected at original resolution; `git diff --check` was clean
 - Strict restricted-path audit verification: ten positive fixtures covering standalone/nested `.env*`, every restricted directory, `.pem`, and `.key` matched; the same expression found no tracked restricted path in this repository
+- Second whole-branch review remediation: both collapsed rails now provide all eight specified destinations (`首页/章节/源码索引/迁移映射` and `目录/证据/警示/引用`), and geometry-based hover/focus assertions prove each tooltip retains non-zero painted area after every clipping ancestor and viewport intersection
+- Second whole-branch review remediation: edge fixtures run complete WCAG A/AA axe analysis after injecting long paths/titles and deeper trees, removing the page TOC and evidence content/entries, and applying the 720 CSS-pixel reflow equivalent of a 1440-pixel window at 200% zoom
+- Second whole-branch review remediation: adjacent-page links use distinct, stable relative template paths instead of placeholder hash targets
+- Second whole-branch completion verification: 38/38 Playwright tests passed; desktop/laptop/mobile snapshots passed zero-diff revalidation and were inspected at original resolution; only the laptop pixels changed because its collapsed right rail now includes the required warning destination
 
 ## Major decisions requiring user confirmation
 
@@ -48,7 +52,8 @@
 | DEV-004 | 2026-07-17 | Task 4 accessibility | The approved gold token `#9b6c29` produced 3.68:1 contrast for small navigation labels on `#eee5d8`, below the axe-enforced WCAG AA 4.5:1 threshold | Darken only `--gold` to `#76521f` | Preserve the approved warm palette while clearing the exact serious color-contrast violation without weakening axe | Navigation labels remain visually gold-brown and pass the serious/critical axe audit | Typography or navigation background changes alter the measured contrast |
 | DEV-005 | 2026-07-17 | Task 4 snapshot tooling | With Playwright 1.61.1, bare `--update-snapshots` consumes the following test path as its optional mode and rejects it | Set the package script to `playwright test --update-snapshots=all` | Keep `npm run test:update-snapshots -- tests/site/template-visual.spec.js` executable with explicit, current CLI semantics | The approved update command generates all three requested baselines and the subsequent normal run verifies zero diff | Playwright removes the optional-mode ambiguity or the project changes snapshot-update policy |
 | DEV-006 | 2026-07-17 | Whole-branch review source fixture | A moving branch name or illustrative hash would make the template's source evidence unverifiable over time | Resolve the official GitHub remote HEAD, pin the full `b8d8b936…` commit, fetch the raw file, and show only the exact 424–445 line range behind an immutable link | The template must teach evidence discipline and must not imply that a fabricated snippet is official source | The sample remains reproducible even as MindSpeed advances; it is explicitly a template fixture, not a claim that this is Qwen3-TTS's eventual migration hook | Phase 1 selects a different main reference project or replaces the template fixture with a research-backed page |
-| DEV-007 | 2026-07-17 | Whole-branch review reflow test | CSS `zoom: 2` scales the document box itself and creates artificial overflow unlike browser 200% zoom, which halves the layout viewport | Exercise a 512 CSS-pixel viewport as the 200% reflow equivalent of a 1024 CSS-pixel window, then inject long paths, deep headings, and an empty evidence rail | This tests WCAG-style reflow behavior without conflating page zoom CSS with browser zoom | Automated coverage reflects the layout viewport users receive at 200%; physical/browser chrome is outside Playwright's page model | Cross-browser zoom automation becomes part of the project or a browser exposes stable zoom controls to Playwright |
+| DEV-007 | 2026-07-17 | Whole-branch review reflow test | CSS `zoom: 2` scales the document box itself and creates artificial overflow unlike browser 200% zoom, which halves the layout viewport | Exercise a 720 CSS-pixel viewport as the 200% reflow equivalent of a 1440 CSS-pixel window, open the real chapter drawer, and inject long paths plus a visibly painted sixth-level tree path | This tests WCAG-style reflow behavior without conflating page zoom CSS with browser zoom, while keeping the deep fixture observable rather than inert/offscreen | Automated coverage reflects the layout viewport users receive at 200%; physical/browser chrome is outside Playwright's page model | Cross-browser zoom automation becomes part of the project or a browser exposes stable zoom controls to Playwright |
+| DEV-008 | 2026-07-17 | Second whole-branch review collapsed rails | Tooltip elements positioned outside a `2.5rem` rail cannot be painted through an ancestor whose overflow is clipped | Keep collapsed rail content minimal and set only the collapsed sidebar container to `overflow: visible`; retain scrollable overflow while expanded | The tooltip remains attached to its semantic link and can escape the rail without portals, duplicated controls, or remote/runtime dependencies | All eight hover/focus tooltips are visibly painted and keyboard focus retains the approved rail geometry | A future rail adds enough destinations to exceed the viewport height or introduces content other than the bounded shortcut list |
 
 ## Evidence gaps
 

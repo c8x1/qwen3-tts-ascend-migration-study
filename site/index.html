@@ -31,6 +31,7 @@
         <a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a>
         <a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a>
         <a class="rail-link" href="#source"><span aria-hidden="true">⌘</span><span class="rail-tooltip">源码索引</span></a>
+        <a class="rail-link" href="#migration-map"><span aria-hidden="true">⇄</span><span class="rail-tooltip">迁移映射</span></a>
       </div>
       <div class="sidebar-content">
         <p class="nav-label">学习路径</p>
@@ -63,7 +64,7 @@
           </li>
           <li><a href="#">05 · 数据流水线</a></li><li><a href="#">06 · 模型与 Loss</a></li><li><a href="#">07 · Checkpoint</a></li>
         </ul>
-        <p class="nav-label">迁移映射</p>
+        <p id="migration-map" class="nav-label">迁移映射</p>
         <a href="#">NVIDIA → Ascend</a><a href="#">未来实验清单</a>
       </div>
       <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
@@ -117,7 +118,7 @@ initialize_ndmm_parallel_group(
           <h2>3. 验证方法</h2>
           <p>先检查每个进程的设备绑定和全局 rank，再验证默认 HCCL 进程组以及模型并行通信组的成员关系。</p>
         </section>
-        <nav class="page-nav" aria-label="相邻章节"><a href="#">← 上一页：训练入口</a><a href="#">下一页：数据流水线 →</a></nav>
+        <nav class="page-nav" aria-label="相邻章节"><a href="training-entry.html">← 上一页：训练入口</a><a href="data-pipeline.html">下一页：数据流水线 →</a></nav>
       </article>
     </main>
 
@@ -125,12 +126,13 @@ initialize_ndmm_parallel_group(
       <div class="rail-icons" aria-label="证据快捷入口">
         <a class="rail-link" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a>
         <a class="rail-link" href="#evidence-status"><span aria-hidden="true">✓</span><span class="rail-tooltip">证据</span></a>
+        <a class="rail-link" href="#migration-warning"><span aria-hidden="true">⚠</span><span class="rail-tooltip">警示</span></a>
         <a class="rail-link" href="#citations"><span aria-hidden="true">↗</span><span class="rail-tooltip">引用</span></a>
       </div>
       <div class="sidebar-content">
         <section id="page-toc" class="rail-card toc-card"><h2>本页目录</h2><a href="#call-chain">调用链位置</a><a href="#source">关键源码</a><a href="#verification">验证方法</a></section>
         <section id="evidence-status" class="rail-card"><h2>证据状态</h2><p>官方源码 · 固定 commit<br>官方 HCCL 文档<br>源码静态核验完成</p></section>
-        <section class="rail-card"><h2>迁移提醒</h2><p>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
+        <section id="migration-warning" class="rail-card"><h2>迁移提醒</h2><p>NCCL → HCCL 不是唯一变化；设备可见性、环境变量和故障诊断方式也需要单独核验。</p></section>
         <section id="citations" class="rail-card"><h2>引用</h2><a class="citation-link print-url" style="--print-url: 'https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b'" href="https://github.com/Ascend/MindSpeed/tree/b8d8b936f9793aa211baf88b6f501ccbc4aed02b">Ascend / MindSpeed 固定版本</a></section>
       </div>
       <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>

@@ -10,18 +10,41 @@ async function expectWcagAA(page) {
   expect(results.violations, JSON.stringify(results.violations, null, 2)).toEqual([]);
 }
 
-test('collapsed rails keep named keyboard-operable destinations with visible tooltips', async ({ page }) => {
+async function paintedArea(locator) {
+  return locator.evaluate((node) => {
+    let rect = node.getBoundingClientRect();
+    let left = Math.max(0, rect.left);
+    let top = Math.max(0, rect.top);
+    let right = Math.min(innerWidth, rect.right);
+    let bottom = Math.min(innerHeight, rect.bottom);
+    for (let parent = node.parentElement; parent; parent = parent.parentElement) {
+      const style = getComputedStyle(parent);
+      const clipsX = /(auto|scroll|hidden|clip)/.test(style.overflowX);
+      const clipsY = /(auto|scroll|hidden|clip)/.test(style.overflowY);
+      if (!clipsX && !clipsY) continue;
+      rect = parent.getBoundingClientRect();
+      if (clipsX) { left = Math.max(left, rect.left); right = Math.min(right, rect.right); }
+      if (clipsY) { top = Math.max(top, rect.top); bottom = Math.min(bottom, rect.bottom); }
+    }
+    return Math.max(0, right - left) * Math.max(0, bottom - top);
+  });
+}
+
+test('collapsed rails paint every named keyboard destination and tooltip inside the viewport', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/site/');
   await page.locator('#toggle-left').click();
   await page.locator('#toggle-right').click();
 
-  for (const name of ['首页', '章节', '源码索引', '目录', '证据', '引用']) {
+  for (const name of ['首页', '章节', '源码索引', '迁移映射', '目录', '证据', '警示', '引用']) {
     const link = page.getByRole('link', { name, exact: true });
     await expect(link).toBeVisible();
-    await link.focus();
-    await expect(link).toBeFocused();
-    await expect(link.locator('.rail-tooltip')).toBeVisible();
+    for (const interaction of ['hover', 'focus']) {
+      if (interaction === 'hover') await link.hover();
+      else await link.focus();
+      if (interaction === 'focus') await expect(link).toBeFocused();
+      expect(await paintedArea(link.locator('.rail-tooltip')), `${name} ${interaction} tooltip is actually painted`).toBeGreaterThan(0);
+    }
   }
 });
 
@@ -53,6 +76,13 @@ test('source block copies text and links to an immutable official source range',
 
   await expect(page.getByRole('navigation', { name: '相邻章节' })).toBeVisible();
   await expect(page.getByRole('contentinfo')).toContainText('固定 commit');
+  const previous = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link').first();
+  const next = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link').last();
+  const previousHref = await previous.getAttribute('href');
+  const nextHref = await next.getAttribute('href');
+  expect(previousHref).toMatch(/\.html$/);
+  expect(nextHref).toMatch(/\.html$/);
+  expect(previousHref).not.toBe(nextHref);
 });
 
 test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
@@ -121,18 +151,47 @@ for (const [name, viewport, openDrawer] of [
   });
 }
 
-test('long paths, deep headings, empty evidence, and absent page TOC remain usable at 200% zoom', async ({ page }) => {
-  // 1024 CSS pixels at 200% browser zoom yields a 512-pixel layout viewport.
-  await page.setViewportSize({ width: 512, height: 768 });
+test('long content, deeper chapter tree, empty evidence, and absent TOC form an axe-clean desktop fixture', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/site/');
   await page.evaluate(() => {
     document.querySelector('.breadcrumb').textContent = Array(8).fill('超长目录名').join(' / ');
     document.querySelector('h1').textContent = '多机多卡深层目录与极长章节标题'.repeat(4);
+    const tree = document.querySelector('#tree-training');
+    tree.hidden = false;
+    tree.insertAdjacentHTML('beforeend', '<li><ul class="tree-branch"><li><ul class="tree-branch"><li><a href="#source">第六层源码定位路径</a></li></ul></li></ul></li>');
     document.querySelector('#evidence-rail .sidebar-content').replaceChildren();
+    document.querySelector('#evidence-rail .rail-icons').replaceChildren();
   });
+  await expect(page.getByRole('link', { name: '第六层源码定位路径' })).toBeVisible();
+  await expect(page.locator('#evidence-rail .sidebar-content')).toBeEmpty();
+  await expect(page.locator('#evidence-rail .rail-icons')).toBeEmpty();
+  for (const name of ['目录', '证据', '警示', '引用']) {
+    await expect(page.getByRole('link', { name, exact: true })).toHaveCount(0);
+  }
   await expect(page.locator('#article-content')).toBeVisible();
   await expect(page.locator('#evidence-rail')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectWcagAA(page);
+});
+
+test('200% reflow fixture paints a deep drawer tree without document overflow or axe violations', async ({ page }) => {
+  // 1440 CSS pixels at 200% browser zoom yields a 720-pixel layout viewport.
+  await page.setViewportSize({ width: 720, height: 900 });
+  await page.goto('/site/');
+  await page.locator('#toggle-left').click();
+  await page.evaluate(() => {
+    document.querySelector('.breadcrumb').textContent = Array(8).fill('超长目录名').join(' / ');
+    document.querySelector('h1').textContent = '多机多卡深层目录与极长章节标题'.repeat(4);
+    const tree = document.querySelector('#tree-training');
+    tree.hidden = false;
+    tree.insertAdjacentHTML('beforeend', '<li><ul class="tree-branch"><li><ul class="tree-branch"><li><a href="#source">200% 下的第六层路径</a></li></ul></li></ul></li>');
+  });
+  const deepLink = page.getByRole('link', { name: '200% 下的第六层路径' });
+  await expect(deepLink).toBeVisible();
+  expect(await paintedArea(deepLink)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await expectWcagAA(page);
 });
 
 test('print keeps citation URLs and immutable source URLs visible without a page TOC', async ({ page }) => {
