@@ -1,6 +1,20 @@
 # Qwen3-TTS Ascend reference selection proposal
 
-本提案截至 2026-07-17（Asia/Shanghai），供用户确认 Phase 1 的参考项目组合与后续取材方式。它只综合既有固定源码审计、官方文档和项目自产材料；没有 clone/vendor 候选仓库，没有下载权重或数据，也没有运行 CUDA、Ascend 910B、训练、推理、转换或评测。分数来自可复算的已审计 CSV，而不是一次运行排名。[SRC-001][SRC-019][SRC-026][SRC-030][SRC-032]
+本提案截至 2026-07-17（Asia/Shanghai），记录 Phase 1 的参考项目组合与后续取材方式。评分和选型只综合既有固定源码审计、官方文档和项目自产材料；它们不代表本研究已运行 CUDA、Ascend 910B、训练、推理、转换或评测，也不授权下载权重或数据。分数来自可复算的已审计 CSV，而不是一次运行排名。[SRC-001][SRC-019][SRC-026][SRC-030][SRC-032]
+
+## Approved selection
+
+用户于 **2026-07-17（Asia/Shanghai）** 明确批准默认路线和 acquisition mode，**没有要求修改路线**。固定选型如下：
+
+| Approved role | Candidate | Canonical URL | Fixed revision | License |
+| --- | --- | --- | --- | --- |
+| main implementation anchor | CAND-001 Ascend/MindSpeed-MM | `https://gitcode.com/Ascend/MindSpeed-MM` | `0edd553e0ac9c912fe422c42cc9f42db9255ddcf` | `Other (aggregate BSD-3-Clause-style notices)` |
+| scale satellite | CAND-002 Ascend/MindSpeed-LLM | `https://gitcode.com/Ascend/MindSpeed-LLM` | `434baff794bd5594ebc9ed8a5b399110da9a44f0` | `Other (aggregate BSD-3-Clause-style notices)` |
+| speech/codec satellite | CAND-003 OpenMOSS/MOSS-TTS | `https://github.com/OpenMOSS/MOSS-TTS` | `ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af` | `Apache-2.0` |
+
+CAND-004 仍为已审计的 optional comparison，未被选入固定清单。用户同时授权对上述三个固定 revision 进行**仓库外部或 `.superpowers/` 下 git-ignored、read-only、source-only 的本地获取**。`research/selected-revisions.csv` 中的 `acquisition_policy=clone` 是获取授权策略：它表示允许在这一外部/ignored 边界内获取固定源码，**不代表 Git clone 传输成功，不表示源码被 vendor 或追踪**。授权不包含公开仓库提交、公开再分发、submodule 添加、权重、数据集、checkpoint 或其他模型资产。
+
+授权策略与实际传输结果分开记录：CAND-001 和 CAND-002 在 smart-HTTP 失败后实际使用了 exact-SHA codeload archive fallback，**不是 clone**；本批准记录不据此断言 CAND-003 的实际获取方式或最终 checkout 状态，这些仍由独立 acquisition handoff/remediation 验证。因此，此处不声称三个源码获取全部完成。
 
 ## 1. Executive recommendation
 
@@ -8,7 +22,7 @@
 
 精确结论是：**存在 exact public Qwen3-TTS→Ascend 的 12Hz Base speaker-SFT 参考，即 MindSpeed-MM；但没有可验证的 exact full-lifecycle 项目同时覆盖 Qwen3-TTS S1/S2/S3 pretrain、tokenizer training、DPO/GSPO、fixed executable eval、CANN 8.5.2、candidate-specific multi-node run/resume。**官方 Qwen3-TTS 固定树本身只公开 12Hz Base 到单说话人 CustomVoice 的 SFT 示例；MindSpeed-MM 补上 exact NPU/FSDP2 训练链，却仍没有上述完整阶段和目标环境运行证据。因此，这个组合是当前公开证据下最接近、可辩护且缺口可见的参考；它既不等于“完全没有 exact 项目”，也不等于“已有完整迁移”。[SRC-001][SRC-003][SRC-019][SRC-020][SRC-021][SRC-022][SRC-043][SRC-066]
 
-本建议现在是 **DEC-002 推荐但 pending**，不会自行生效。请用户在进入下一阶段前批准默认组合、改选下文 alternative，或缩减 satellites；同时必须另行确认 **DEC-001 acquisition mode**。未获两项确认前，不获取本地候选源码、不建立站点内容，也不开始实际迁移。
+**DEC-002 route selection** 和 **DEC-001 acquisition mode** 均已于 2026-07-17 由用户明确批准，并固化为上述组合和授权边界。此批准只允许 source-only acquisition 与后续计划准备，不自动授权建立站点内容、实施迁移或运行模型。
 
 ## 2. Ranked audited candidates and final scores
 
@@ -102,12 +116,12 @@ MOSS-TTS 推荐 Python 3.12/CUDA 12.8/PyTorch 2.9.1，CosyVoice 固定 CUDA 12.1
 
 | Candidate | Fixed-source license record | Current permission boundary | If source is copied/redistributed |
 | --- | --- | --- | --- |
-| CAND-001 MindSpeed-MM | `Other (aggregate BSD-3-Clause-style notices)` | 仅链接、metadata、fixed-source reading | 先逐文件 license/notice 审计，再向用户二次确认 [SRC-024][SRC-071] |
-| CAND-002 MindSpeed-LLM | `Other (aggregate BSD-3-Clause-style notices)` | 仅链接、metadata、fixed-source reading | 同上，并保留 third-party notices [SRC-029][SRC-086] |
-| CAND-003 MOSS-TTS | root Apache-2.0；fixed `moss_audio_tokenizer@56776e...` 也为 Apache-2.0 | 可在获批 acquisition mode 后读取 source-only revision | parent 不 blanket-cover submodule；权重/数据/资产另审 [SRC-030][SRC-088][SRC-103][SRC-104] |
+| CAND-001 MindSpeed-MM | `Other (aggregate BSD-3-Clause-style notices)` | 已授权外部/ignored read-only source-only 获取 | 公开复制/再分发前仍须逐文件 license/notice 审计和二次确认 [SRC-024][SRC-071] |
+| CAND-002 MindSpeed-LLM | `Other (aggregate BSD-3-Clause-style notices)` | 已授权外部/ignored read-only source-only 获取 | 同上，并保留 third-party notices [SRC-029][SRC-086] |
+| CAND-003 MOSS-TTS | root Apache-2.0；fixed `moss_audio_tokenizer@56776e...` 也为 Apache-2.0 | 已授权外部/ignored read-only source-only 获取 | parent 不 blanket-cover submodule；权重/数据/资产另审 [SRC-030][SRC-088][SRC-103][SRC-104] |
 | CAND-004 CosyVoice | root Apache-2.0；fixed `Matcha-TTS@dd9105...` 为 MIT | 仅按需作为次级对照 | parent/submodule 分别保留 notice；预训练、导出资产另审 [SRC-032][SRC-094][SRC-106][SRC-107] |
 
-**DEC-001 推荐默认 acquisition mode（pending）：**用户批准路线后，采用仓库外部或 git-ignored 的 read-only checkout，固定 source-only revisions，**不提交到公共仓**；所有讲解页面只使用必要的短引用和 immutable links。若用户要求把源码复制进 `references/` 或公开再分发，先做逐文件 license/notice 与 asset provenance 审计，然后再次取得明确确认。当前提案不授权 clone、vendor、submodule 添加、权重/数据/模型资产下载或公开再分发。
+**DEC-001 acquisition mode（approved 2026-07-17）：**采用仓库外部或 `.superpowers/` 下 git-ignored 的 read-only source-only acquisition，固定 revisions，**不提交到公共仓**；所有讲解页面只使用必要的短引用和 immutable links。若要把源码复制进 `references/` 或公开再分发，先做逐文件 license/notice 与 asset provenance 审计，然后再次取得明确确认。CSV 的 `clone` 值表示此本地获取授权，不证明 Git clone 成功；当前仍不授权 vendor、submodule 添加、权重/数据/模型资产下载或公开再分发。
 
 ## 10. Verified facts, project claims, inferences, and 910B validation gaps
 
@@ -134,16 +148,16 @@ MOSS-TTS 推荐 Python 3.12/CUDA 12.8/PyTorch 2.9.1，CosyVoice 固定 CUDA 12.1
 
 以 MOSS-TTS 为结构学习主线，辅以 MindSpeed-MM。它对 Delay/multi-codebook/reference conditioning/data/SFT 的讲解更丰富，但 MOSS upstream 没有 Ascend training，CUDA/PyTorch 2.9.1 与 target 栈错位，且 topology 并非 Qwen3-TTS 16-codebook residual MTP。这个路线适合纯 architecture survey，**不推荐**作为 Ascend 主训练链。[SRC-030][SRC-031][SRC-089][SRC-092][SRC-093]
 
-## 12. Exact next-stage scope after approval
+## 12. Exact next-stage scope under the approval
 
-只有用户同时批准 **DEC-002 route selection** 和 **DEC-001 acquisition mode** 后，下一阶段才执行以下 scope：
+用户已同时批准 **DEC-002 route selection** 和 **DEC-001 acquisition mode**；下一阶段仅可执行以下 scope：
 
 1. 只获取用户许可的 **source-only fixed revisions**，默认放在外部或 ignored read-only checkout；不下载权重、数据或模型资产。
 2. 对获批 revisions 建立源码索引：entry points、训练/data/device/operator/checkpoint/conversion/eval 路径与固定链接。
 3. 建立 Qwen3-TTS target checklist→主项目→satellite 的调用链、缺口和 N→D 迁移映射，持续使用四态证据标签。
 4. 设计多页 HTML **内容架构**与页面清单，所有代码展示只用短引用和 immutable source links；是否实际生成页面由后续任务另行授权。
 
-明确排除：不实施实际 NVIDIA/CUDA→Ascend/NPU 迁移代码，不修改候选源码，不运行训练/推理/eval，不执行 910B smoke，不下载权重/数据，不把仓库 vendor 进 `references/`，也不把 CANN 8.5.2 标记为兼容。若用户拒绝默认路线，应先按第 11 节的后果重定范围，再进行 acquisition。
+明确排除：不实施实际 NVIDIA/CUDA→Ascend/NPU 迁移代码，不修改候选源码，不运行训练/推理/eval，不执行 910B smoke，不下载权重/数据，不把仓库 vendor 进 `references/`，也不把 CANN 8.5.2 标记为兼容。第 11 节的替代路线及后果保留为历史决策记录，本次批准没有要求转向它们。
 
 ## 13. Source index
 
@@ -161,4 +175,4 @@ MOSS-TTS 推荐 Python 3.12/CUDA 12.8/PyTorch 2.9.1，CosyVoice 固定 CUDA 12.1
 | MOSS-TTS speech/codec | SRC-030, SRC-031, SRC-050, SRC-088, SRC-089, SRC-090, SRC-091, SRC-092, SRC-093, SRC-102, SRC-103, SRC-104 | Delay/SFT/data/config、CUDA mismatch、fixed submodule/license |
 | CosyVoice optional comparison | SRC-032, SRC-033, SRC-051, SRC-094, SRC-095, SRC-096, SRC-097, SRC-098, SRC-099, SRC-105, SRC-106, SRC-107 | staged data/train/eval/export、CUDA mismatch、fixed submodule/license |
 
-**待用户决策：**批准默认组合（CAND-001 main + CAND-002 scale satellite + CAND-003 speech/codec satellite；CAND-004 optional），或指定第 11 节 alternative；并分别批准默认 external/ignored read-only source acquisition，或要求另一种 acquisition mode。在明确回复前，本提案停在 selection gate。
+**已完成决策检查点：**用户于 2026-07-17 批准默认组合（CAND-001 main + CAND-002 scale satellite + CAND-003 speech/codec satellite；CAND-004 optional 且未选入）和 external/ignored read-only source-only acquisition，未要求路线变更。下一检查点是完成获批源码获取状态的独立核对，再基于实际固定源码树编写 Phase 2 plan；此处不声称任一项已完成。

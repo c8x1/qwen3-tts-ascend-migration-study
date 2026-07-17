@@ -1,0 +1,4 @@
+role,candidate_id,name,canonical_url,revision,license,acquisition_policy
+main,CAND-001,MindSpeed-MM,https://gitcode.com/Ascend/MindSpeed-MM,0edd553e0ac9c912fe422c42cc9f42db9255ddcf,"Other (aggregate BSD-3-Clause-style notices)",clone
+scale-satellite,CAND-002,MindSpeed-LLM,https://gitcode.com/Ascend/MindSpeed-LLM,434baff794bd5594ebc9ed8a5b399110da9a44f0,"Other (aggregate BSD-3-Clause-style notices)",clone
+speech-codec-satellite,CAND-003,MOSS-TTS,https://github.com/OpenMOSS/MOSS-TTS,ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af,Apache-2.0,clone
