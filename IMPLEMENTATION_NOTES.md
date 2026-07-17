@@ -2,13 +2,16 @@
 
 ## Current status
 
-- Phase: Knowledge-site template
-- Active task: Third whole-branch review remediation complete
-- Last verified baseline: Third whole-branch review remediation — 39/39 Playwright tests passed on 2026-07-17
+- Phase: Phase 1 reference-project selection
+- Active task: Task 2 — evidence contracts and validator
+- Last verified baseline: Phase 1 Task 2 evidence contracts — real skeleton valid, 3/3 Python unit tests and 39/39 Playwright tests passed; whitespace and no-site-change audits clean on 2026-07-17
 
 ## Completed checkpoints
 
 - Research design approved
+- Task 1 governance prerequisites satisfied by the existing README, ignore rules, and this implementation log; prior template history is preserved
+- Task 2 evidence contracts established: source ledger, exact-query search log, candidate scoring table, and unified methodology
+- Task 2 standard-library validator established for CSV headers, IDs, enums, URLs, dates, score bounds and totals, and candidate evidence references
 - Template visual and interaction specification approved
 - Task 1 complete: fixed-dependency Playwright harness established and verified
 - Task 2 complete: semantic three-column page and local visual system implemented and verified
@@ -61,6 +64,7 @@
 | DEV-008 | 2026-07-17 | Second whole-branch review collapsed rails | Tooltip elements positioned outside a `2.5rem` rail cannot be painted through an ancestor whose overflow is clipped | Keep collapsed rail content minimal and set only the collapsed sidebar container to `overflow: visible`; retain scrollable overflow while expanded | The tooltip remains attached to its semantic link and can escape the rail without portals, duplicated controls, or remote/runtime dependencies | All eight hover/focus tooltips are visibly painted and keyboard focus retains the approved rail geometry | A future rail adds enough destinations to exceed the viewport height or introduces content other than the bounded shortcut list |
 | DEV-009 | 2026-07-17 | Third whole-branch review tooltip hit testing | A tooltip may have non-zero geometry yet still paint below the adjacent article; permanently enabling pointer events would also let invisible tooltips intercept input | Raise only collapsed sidebar grid items above the article and enable tooltip pointer events only in their visible hover/focus-visible states | This makes browser hit testing an observable paint-order contract without adding portals or a global overlay | Three interior points per tooltip resolve to the tooltip/link stack for all eight destinations and both interaction modes; normal page content remains the target while tooltips are inactive | The shell gains a new overlay/stacking context or tooltips contain interactive controls that need a different dismissal model |
 | DEV-010 | 2026-07-17 | Third whole-branch review optional evidence | Future generated pages may omit individual evidence regions or the entire right rail, and static empty placeholders waste space | Associate content, cards, and shortcuts declaratively and keep their availability synchronized with a narrowly scoped MutationObserver | This supports both initial generation and dynamic content replacement without page-specific JavaScript branches | Partial content keeps the rail/toggle usable; all-empty content removes the rail track and expands the article | The site generator guarantees complete per-page region metadata at build time and can perform the same pruning statically |
+| DEV-011 | 2026-07-17 | Phase 1 Task 2 evidence contracts | CSV consumers may run across tools and operating systems with different defaults for encoding, line endings, and list serialization | Standardize the three evidence files as UTF-8 without BOM, LF-terminated comma-separated records in exact header order; use `|` only for multi-ID fields | Python's standard `csv` module reads this format without extra dependencies, while explicit list delimiters keep the tabular schema stable | Research records remain portable and deterministic; producers must quote CSV text fields and preserve exact header order | A downstream required tool cannot consume UTF-8/LF or the schema is formally versioned with a different serialization |
 
 ## Evidence gaps
 
@@ -71,4 +75,4 @@
 
 ## Next actions
 
-1. Begin Phase 1 reference-project research using the approved reference-selection design.
+1. Reconstruct the official Qwen3-TTS target baseline at a fixed revision.
