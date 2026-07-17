@@ -273,6 +273,8 @@ import hashlib
 import collections
 import csv
 import re
+import tempfile
+import urllib.parse
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -1914,7 +1916,7 @@ Create `scripts/site_builder.py` with HTML escaping on every catalog/index value
 
 `render_page(page, navigation, evidence, search_documents) -> str` follows this complete deterministic algorithm: (1) reject any block evidence ID absent from `evidence`; (2) compute CSS/JS/search/nav links with `relative_href`; (3) render the shared header/search form, `chapter-nav`, `chapter-tree`, `article-content`, one escaped `h1`, objectives/prerequisites, and `page-toc`; (4) dispatch only the five tagged block types, escape every scalar with `html.escape(..., quote=True)`, verify table row widths, and give index rows the same `_anchor` used by search; (5) collect referenced evidence in first-use order and render `evidence-rail` cards with state text, fixed source/ledger links, and each allowlisted internal decision path through `decision_href(page["slug"], ref)`—therefore `site/index.html` uses `../research/...` and `site/target/*.html` uses `../../research/...`; (6) render `toggle-left`/`toggle-right` controls and previous/next navigation; (7) on `search.html`, embed `script_safe_json(search_documents)` in `#search-data` and render the alphabetical no-script page directory; (8) join fixed partials with `\n` and end with exactly one newline. Stable failures are `page <slug>#<section>: unknown evidence <id>`, `block <type>: unsupported`, and `table <section>: row width <n> expected <m>`.
 
-Dependency direction is one-way: `site_builder.py` imports data contracts/loaders from `phase2_contracts.py`; `phase2_contracts.py` never imports `site_builder.py` at module import time. The Task 8 fresh-build validator uses a function-local `from scripts.site_builder import build_site` only after both modules are initialized, preventing a circular import.
+Dependency direction is one-way at module initialization: `site_builder.py` imports data contracts/loaders from `phase2_contracts.py`; `phase2_contracts.py` never imports `site_builder.py` at module import time. Task 8 uses function-local imports for both `load_all_indexes` in `validate_cross_contracts` and `build_site` in the fresh-build validator only after both modules are initialized, preventing a circular import.
 
 ```python
 def script_safe_json(data: object) -> str:
@@ -2345,6 +2347,7 @@ def validate_cross_contracts(pages, evidence, coverage) -> list[str]:
                 errors.append(f"page {page['slug']}#{section['id']}: unknown evidence {evidence_id}")
 
     # 2. Compare the coverage path multiset with the fixed target-index multiset.
+    from scripts.site_builder import load_all_indexes
     target = load_all_indexes()["qwen3-tts-022e286b"]
     target_paths = collections.Counter(row["path"] for row in target["files"])
     coverage_paths = collections.Counter(row["path"] for row in coverage)
@@ -2563,7 +2566,7 @@ test('720 CSS pixels at 200 percent has no document overflow', async ({ page }) 
   await page.goto('/site/target/coverage-gaps.html');
   await expect(page.locator('.table-scroll')).not.toHaveCount(0);
   const metrics = await page.evaluate(() => ({ scroll: document.documentElement.scrollWidth, client: document.documentElement.clientWidth,
-    tableScrollable: [...document.querySelectorAll('.table-scroll')].every((node) => node.scrollWidth >= node.clientWidth) }));
+    tableScrollable: [...document.querySelectorAll('.table-scroll')].some((node) => node.scrollWidth > node.clientWidth) }));
   expect(metrics.scroll).toBeLessThanOrEqual(metrics.client);
   expect(metrics.tableScrollable).toBe(true);
 });
