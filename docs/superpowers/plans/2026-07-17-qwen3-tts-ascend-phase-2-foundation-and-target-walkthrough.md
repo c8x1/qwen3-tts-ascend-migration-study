@@ -2299,6 +2299,9 @@ class GeneratedSiteContractTest(unittest.TestCase):
                           validate_public_tracking(root, ["models/weights.bin"]))
             self.assertIn("public tracking: restricted path references/private.md",
                           validate_public_tracking(root, ["references/private.md"]))
+            for restricted in ("artifact.gguf", "audio.flac"):
+                self.assertIn(f"public tracking: restricted path {restricted}",
+                              validate_public_tracking(root, [restricted]))
             (root / "pointer.txt").write_text(
                 "version https://git-lfs.github.com/spec/v1\n"
                 "oid sha256:0123456789abcdef\nsize 12\n", encoding="utf-8")
@@ -2555,7 +2558,8 @@ RESTRICTED_DIRS = {"model", "models", "weight", "weights", "dataset", "datasets"
 RESTRICTED_SUFFIXES = {".pem", ".key", ".safetensors", ".ckpt", ".pt", ".pth",
                        ".bin", ".onnx", ".h5", ".hdf5", ".npy", ".npz",
                        ".parquet", ".arrow", ".feather", ".tfrecord", ".mdb",
-                       ".sqlite", ".db", ".jsonl", ".wav", ".mp3", ".m4a"}
+                       ".sqlite", ".db", ".jsonl", ".gguf", ".wav", ".mp3",
+                       ".m4a", ".flac"}
 LFS_HEADER = b"version https://git-lfs.github.com/spec/v1"
 
 
@@ -2768,7 +2772,7 @@ Expected: every discovered Playwright test passes; report the runner's actual to
 Run:
 
 ```bash
-git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|wav|mp3|m4a)$' && exit 1 || true
+git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|gguf|wav|mp3|m4a|flac)$' && exit 1 || true
 git ls-files -z | xargs -0 rg -l -U '^version https://git-lfs\.github\.com/spec/v1' && exit 1 || true
 rg -ni 'to''do|tb''d|place''holder|lorem'' ipsum' content research/indexes research/target-evidence.json research/target-coverage.csv site scripts tests
 rg -n '/Users/|[A-Za-z]:\\\\' research/indexes site/assets/search-index.json
@@ -2801,7 +2805,7 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 npm test
 git diff --check
 git status -sb
-git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|wav|mp3|m4a)$' && exit 1 || true
+git ls-files | rg '(^|/)\.superpowers/source-checkouts(/|$)|(^|/)references(/|$)|(^|/)\.env(\.[^/]*)?$|(^|/)(models?|weights?|datasets?|data|checkpoints?)(/|$)|\.(pem|key|safetensors|ckpt|pt|pth|bin|onnx|h5|hdf5|npy|npz|parquet|arrow|feather|tfrecord|mdb|sqlite|db|jsonl|gguf|wav|mp3|m4a|flac)$' && exit 1 || true
 git ls-files -z | xargs -0 rg -l -U '^version https://git-lfs\.github\.com/spec/v1' && exit 1 || true
 ```
 
