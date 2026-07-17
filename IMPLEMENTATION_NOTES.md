@@ -3,8 +3,8 @@
 ## Current status
 
 - Phase: Phase 1 reference-project selection
-- Active task: Task 3 official Qwen3-TTS target baseline review remediation complete
-- Last verified baseline: Phase 1 Task 3 review remediation — research data valid, 15/15 Python validator unit tests passed, 17 official source IDs and 11 preserved-history queries were valid, all 12 asset revisions had direct ledger/report chains, six official-first/GitHub searches were recorded after the original five rows, every non-table factual paragraph ended in a source ID, and placeholder/whitespace/no-site-change audits were clean on 2026-07-17; Playwright was not run because Task 3 prohibits site changes
+- Active task: Task 4 Ascend candidate breadth research complete
+- Last verified baseline: Phase 1 Task 4 final gate — research data valid; 15/15 Python validator unit tests passed; all 8 required landscape headings were found; 47 sources, 38 exact queries and 15 deduplicated candidates passed numeric-ID, duplicate, score-total, evidence-reference and canonical-URL audits; 4 shortlisted projects have full 40-character revisions; 7 rejected projects have explicit reasons; two saturation passes each contain 4 zero-new-candidate queries; `git diff --check`, no-site and no-weight/data audits were clean on 2026-07-17. Playwright was not run because Task 4 prohibits site work.
 
 ## Completed checkpoints
 
@@ -16,6 +16,10 @@
 - Task 2 review validator remediation enforces audited/recommended evidence, rejected evidence or reason, search-row integrity, candidate references, and exception-free malformed-row reporting
 - Task 3 official evidence integrated and verified at fixed Qwen3-TTS source revision `022e286b98fbec7e1e916cb940cdf532cd9f488e`, arXiv `2601.15621v1`, and full official Hugging Face/ModelScope asset revisions
 - Task 3 review remediation verified per-asset immutable Hugging Face sources, per-asset official ModelScope remotes, and six preserved-history official-first/GitHub search records
+- Task 4 breadth discovery covers all nine required English/Chinese query families and every required channel, preserves two exact GitHub API zero-result searches and one failed authenticated-code-search attempt, and records two consecutive saturation passes with zero new eligible canonical repository
+- Task 4 candidate pool deduplicates GitCode/GitHub/Gitee mirrors into 15 canonical records and retains inference-only or research-axis-mismatched projects as explicit rejections
+- Task 4 shortlist is bounded to MindSpeed-MM as exact Qwen3-TTS SFT main-reference candidate, MindSpeed-LLM as text-Qwen3 scale satellite, and MOSS-TTS/CosyVoice as speech satellites whose Ascend ports remain attributed only to MindSpeed-MM
+- Task 4 final verification passed the standard validator, all 15 research-validator tests, required-heading scan, 47/38/15 count audit, duplicate/score/evidence/fixed-revision/saturation audits, no-site/no-weight checks and whitespace validation
 - Template visual and interaction specification approved
 - Task 1 complete: fixed-dependency Playwright harness established and verified
 - Task 2 complete: semantic three-column page and local visual system implemented and verified
@@ -51,7 +55,7 @@
 
 ## Major decisions requiring user confirmation
 
-- None. The template direction is approved.
+- **DEC-001 — MindSpeed source vendoring is not authorized.** CAND-001 and CAND-002 root licenses contain aggregate BSD-3-Clause-style terms plus upstream/file-level notices while repository metadata does not expose a single reliable SPDX classification. Task 4 therefore records both as `Other (aggregate...)` and stores links/metadata only. Any later clone/vendor/copy of their source into `references/` requires a separate user-approved license decision after file-level review; this does not block the present metadata-only shortlist.
 
 ## Conservative deviations
 
@@ -73,6 +77,10 @@
 | DEV-013 | 2026-07-17 | Phase 1 Task 3 query logging | The web-search tool exposes selected visible results but not a search-engine total | Record only the number of tool-visible result items and state that boundary in every Task 3 query row | Preserves an observable non-negative integer without inventing an unavailable global hit count | Result counts are comparable only as captured tool output and not as coverage metrics | The search provider exposes a stable per-query total and pagination contract |
 | DEV-014 | 2026-07-17 | Phase 1 Task 3 review remediation | Moving Hugging Face and ModelScope collection pages establish inventory but cannot prove twelve asset-level fixed revisions | Add one ledger/source-index ID per asset revision; use immutable official Hugging Face commit URLs and the six official ModelScope Git remotes with read-only `git ls-remote` SHA verification | Keeps each table SHA on a direct first-party evidence chain and avoids claiming the collection page proves revision metadata | The baseline grows from 5 to 17 sources and each asset-table row now cites its exact Hugging Face and ModelScope evidence pair | A platform publishes a stable successor permalink or an asset revision changes under a new dated audit |
 | DEV-015 | 2026-07-17 | Phase 1 Task 3 review remediation | The original five broad web queries did not prove that official domains and the `QwenLM` GitHub organization were searched first | Preserve the original rows and append four official-domain/organization-filter searches before two GitHub organization/fixed-tree API searches | Search order and filter boundaries must be independently auditable rather than inferred from accepted results | The log grows from 5 to 11 queries with actual timestamps and tool-observable counts | The research methodology replaces official-first ordering with a different recorded discovery protocol |
+| DEV-016 | 2026-07-17 | Phase 1 Task 4 breadth search | The research handoffs contain useful historical searches but some report approximate counts or tool summaries rather than exact replayable result totals | Formally log only the exact queries replayed in this integration with precise `+08:00` timestamps and actual tool-visible item counts; describe unreplayed handoff queries as a limitation | Prevents approximate or search-engine-estimated totals from becoming false precision in the tracked fact source | The tracked log has 38 rows and retains exact zero/failure observations without inventing counts for historical handoff searches | A reproducible provider export supplies exact historical response counts and timestamps |
+| DEV-017 | 2026-07-17 | Phase 1 Task 4 candidate licensing | MindSpeed-MM and MindSpeed-LLM root license files combine BSD-3-Clause-style terms with upstream notices while platform SPDX metadata is not authoritative | Record both as aggregate `Other`, lower docs/license scores, and prohibit clone/vendor in this phase | A shorthand SPDX guess could hide file-level obligations and change the delivery method | Metadata-only research can continue; any source vendoring becomes DEC-001 and requires explicit approval | Task 5 completes a file-level license audit or the owner publishes authoritative SPDX metadata |
+| DEV-018 | 2026-07-17 | Phase 1 Task 4 fixed revisions | Several rejected moving-only ecosystem entries expose enough official evidence for exclusion but not a stable public commit permalink verified in this task | Leave revision empty and document the moving-source limitation instead of inventing a SHA; require complete SHAs for all four shortlisted projects | Fixed-revision policy must not turn unavailable provenance into fabricated precision | Shortlist evidence is immutable while rejected entries remain reproducible only at their official canonical entry | A stable official commit becomes available or a rejected project returns to active audit scope |
+| DEV-019 | 2026-07-17 | Phase 1 Task 4 compatibility and scale | Public matrices establish CANN 8.5.0 or 9.x routes and launchers expose multi-node configuration, but neither proves target CANN 8.5.2 nor exact Qwen3-TTS multi-node execution | Preserve CANN 8.5.2 compatibility and all candidate-specific multi-node runs as unknown/pending hardware validation | Patch-number inference and launcher presence are weaker than a compatibility row or run artifact | Scores reflect source/config maturity without claiming hardware success | Official 8.5.2 matrix or scoped Ascend 910B execution evidence is produced |
 
 ## Evidence gaps
 
@@ -84,7 +92,11 @@
 - The official tree provides no project launcher or tested evidence for NCCL, single-node 8-card or multi-node training; Accelerate wrapper points do not establish correctness, scaling or fault tolerance.
 - No CUDA, FlashAttention, NCCL, CANN, torch-npu, MindSpeed or Ascend 910B execution was performed; all compatibility, precision, kernel and performance behavior remains pending hardware validation.
 - Official performance, quality, streaming, dataset-scale and benchmark statements remain project claims because this task did not download weights/data or reproduce the runs.
+- CANN 8.5.2 compatibility is not established by the inspected CAND-001 8.5.0 defaults or CAND-002 9.x release route; patch-level compatibility remains unknown.
+- MindSpeed-MM exposes exact Qwen3-TTS multi-node launch parameters but no candidate-specific multi-node run artifact was verified; MindSpeed-LLM scale evidence is not speech training evidence.
+- CAND-001/CAND-002 vendoring remains prohibited pending DEC-001; CAND-006 and CAND-011–014 retain moving-only official exclusion sources rather than fabricated fixed revisions.
+- GitHub code search QRY-038 returned HTTP 401 and was excluded from saturation proof; private, deleted, unindexed or access-controlled repositories remain outside observable coverage.
 
 ## Next actions
 
-1. Audit candidate reference projects against the official Qwen3-TTS target-module checklist and the documented training/distributed evidence gaps.
+1. In Task 5, deeply audit CAND-001/CAND-002 and only the target-module-relevant speech paths of CAND-003/CAND-004; do not clone/vendor until DEC-001 is resolved.
