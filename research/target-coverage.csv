@@ -1,0 +1,36 @@
+path,disposition,page,section,evidence_ids,reason
+.github/ISSUE_TEMPLATE/bug_report.yml,excluded,,,,Repository governance form; not runtime or training source
+.github/ISSUE_TEMPLATE/config.yml,excluded,,,,Repository governance form; not runtime or training source
+.github/workflows/inactive.yaml,excluded,,,,Repository maintenance workflow; not target execution flow
+.github/workflows/translate.yaml,excluded,,,,Repository translation workflow; not target execution flow
+.gitignore,excluded,,,,Repository hygiene only
+LICENSE,mapped,index.html,public-scope,TGT-PKG-003,
+MANIFEST.in,mapped,target/package-inference-api.html,package-layout,TGT-PKG-004,
+README.md,mapped,index.html,public-scope,TGT-SCOPE-002,
+examples/test_model_12hz_base.py,mapped,target/package-inference-api.html,base-api,TGT-API-002,
+examples/test_model_12hz_custom_voice.py,mapped,target/package-inference-api.html,custom-api,TGT-API-003,
+examples/test_model_12hz_voice_design.py,mapped,target/package-inference-api.html,voice-design-api,TGT-API-003,
+examples/test_tokenizer_12hz.py,mapped,target/tokenizer-12hz.html,encode-contract,TGT-TOK12-001,
+finetuning/README.md,mapped,target/sft-data-collate.html,public-recipe,TGT-SCOPE-001,
+finetuning/dataset.py,mapped,target/sft-data-collate.html,collate-contract,TGT-DATA-002,
+finetuning/prepare_data.py,mapped,target/sft-data-collate.html,offline-codes,TGT-DATA-001,
+finetuning/sft_12hz.py,mapped,target/sft-training-loop.html,training-loop,TGT-TRAIN-005,
+pyproject.toml,mapped,target/package-inference-api.html,package-layout,TGT-PKG-001,
+qwen_tts/__init__.py,mapped,target/package-inference-api.html,package-layout,TGT-PKG-005,
+qwen_tts/__main__.py,mapped,target/package-inference-api.html,package-layout,TGT-PKG-006,
+qwen_tts/cli/demo.py,mapped,target/package-inference-api.html,target-defaults,TGT-CLI-001|TGT-CLI-002,
+qwen_tts/core/__init__.py,mapped,target/tokenizer-12hz.html,package-tokenizer-registry,TGT-PKG-002,
+qwen_tts/core/models/__init__.py,mapped,target/model-architecture.html,composite-config,TGT-CONFIG-001,
+qwen_tts/core/models/configuration_qwen3_tts.py,mapped,target/model-architecture.html,composite-config,TGT-CONFIG-001,
+qwen_tts/core/models/modeling_qwen3_tts.py,mapped,target/model-architecture.html,talker,TGT-MODEL-002,
+qwen_tts/core/models/processing_qwen3_tts.py,mapped,target/processor-contracts.html,text-contract,TGT-PROC-001,
+qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py,mapped,target/tokenizer-12hz.html,configuration,TGT-TOK12-002|TGT-TOK12-003,
+qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py,mapped,target/tokenizer-12hz.html,encode-contract,TGT-TOK12-001,
+qwen_tts/core/tokenizer_25hz/configuration_qwen3_tts_tokenizer_v1.py,pending,target/tokenizer-25hz.html,asset-inventory,TGT-TOK25-002,25Hz public checkpoint and executable path remain unknown
+qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py,pending,target/tokenizer-25hz.html,dit-bigvgan,TGT-TOK25-001,Static dependencies and encode/decode wiring are verified but runtime assets and execution are unverified
+qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz,pending,target/tokenizer-25hz.html,bundled-filter,TGT-TOK25-014,Fixed binary URL and metadata only; binary body is never copied and execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/core_vq.py,pending,target/tokenizer-25hz.html,vq-core,TGT-TOK25-009|TGT-TOK25-010,Direct VQ source is mapped; execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/speech_vq.py,pending,target/tokenizer-25hz.html,speech-vq,TGT-TOK25-004|TGT-TOK25-005,Direct ONNX/SoX/Kaldi dependencies are mapped; execution remains unverified
+qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py,pending,target/tokenizer-25hz.html,whisper-encoder,TGT-TOK25-006|TGT-TOK25-007,Direct flash-attn dtype/manual fallback is mapped; execution remains unverified
+qwen_tts/inference/qwen3_tts_model.py,mapped,target/package-inference-api.html,load-chain,TGT-API-001,
+qwen_tts/inference/qwen3_tts_tokenizer.py,mapped,target/processor-contracts.html,audio-wrapper,TGT-PROC-002,

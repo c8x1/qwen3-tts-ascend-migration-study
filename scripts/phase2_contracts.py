@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
+import collections
+import csv
 import hashlib
 import json
 import re
 from dataclasses import dataclass
-from functools import cache
+from functools import cache, lru_cache
 from pathlib import Path
 from typing import Any
 
 
 _ROOT = Path(__file__).resolve().parents[1]
+ROOT = _ROOT
 _SOURCE_INDEX_SCHEMA = _ROOT / "research" / "schemas" / "source-index.schema.json"
 _HEX40 = re.compile(r"^[0-9a-f]{40}$")
 _WINDOWS_DRIVE = re.compile(r"^[A-Za-z]:[\\/]")
@@ -37,6 +40,28 @@ class Snapshot:
     blob_url_template: str
     excluded_paths: tuple[str, ...]
     gitlinks: tuple[dict[str, object], ...]
+
+
+@dataclass(frozen=True)
+class Evidence:
+    evidence_id: str
+    snapshot_id: str | None
+    path: str | None
+    start_line: int | None
+    end_line: int | None
+    state: str
+    claim: str
+    quote: str
+    source_ids: tuple[str, ...]
+    decision_refs: tuple[str, ...]
+
+
+DECISION_REFS = {
+    "research/reference-selection-proposal.md",
+    "research/selected-revisions.csv",
+}
+EVIDENCE_STATES = {"verified", "project_claim", "inference", "pending_hardware"}
+DISPOSITIONS = {"mapped", "excluded", "pending"}
 
 
 _APPROVED: dict[str, dict[str, Any]] = {
@@ -331,25 +356,22 @@ def _json_type_matches(value: object, expected: str) -> bool:
     return False
 
 
-def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: list[str]) -> None:
-    variants = schema.get("oneOf")
-    if isinstance(variants, list):
-        matches = 0
-        for variant in variants:
-            variant_errors: list[str] = []
-            if isinstance(variant, dict):
-                _validate_schema(value, variant, path, variant_errors)
-            else:
-                variant_errors.append(f"{path}: invalid schema variant")
-            if not variant_errors:
-                matches += 1
-        if matches != 1:
-            errors.append(f"{path}: expected exactly one allowed shape")
-        return
-
+def _validate_schema(
+    value: object,
+    schema: dict[str, Any],
+    path: str,
+    errors: list[str],
+    one_of_error: str = "expected exactly one allowed shape",
+) -> None:
     expected_type = schema.get("type")
     if isinstance(expected_type, str) and not _json_type_matches(value, expected_type):
         errors.append(f"{path}: expected {expected_type}")
+        return
+    if isinstance(expected_type, list) and not any(
+        isinstance(candidate, str) and _json_type_matches(value, candidate)
+        for candidate in expected_type
+    ):
+        errors.append(f"{path}: expected one of types {expected_type}")
         return
 
     if isinstance(value, dict):
@@ -368,13 +390,29 @@ def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: l
             child_schema = properties[field]
             if isinstance(child_schema, dict):
                 child_path = f"{path}.{field}"
-                _validate_schema(value[field], child_schema, child_path, errors)
+                _validate_schema(
+                    value[field], child_schema, child_path, errors, one_of_error
+                )
 
     if isinstance(value, list):
+        minimum_items = schema.get("minItems")
+        if isinstance(minimum_items, int) and len(value) < minimum_items:
+            errors.append(f"{path}: fewer than {minimum_items} items")
+        if schema.get("uniqueItems") is True:
+            for index, item in enumerate(value):
+                if any(item == previous for previous in value[:index]):
+                    errors.append(f"{path}: duplicate item")
+                    break
         item_schema = schema.get("items")
         if isinstance(item_schema, dict):
             for index, item in enumerate(value):
-                _validate_schema(item, item_schema, f"{path}[{index}]", errors)
+                _validate_schema(
+                    item,
+                    item_schema,
+                    f"{path}[{index}]",
+                    errors,
+                    one_of_error,
+                )
 
     if "const" in schema and value != schema["const"]:
         errors.append(f"{path}: expected {schema['const']}")
@@ -384,6 +422,12 @@ def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: l
     pattern = schema.get("pattern")
     if isinstance(pattern, str) and isinstance(value, str) and re.search(pattern, value) is None:
         errors.append(f"{path}: does not match pattern {pattern}")
+    minimum_length = schema.get("minLength")
+    if isinstance(minimum_length, int) and isinstance(value, str) and len(value) < minimum_length:
+        errors.append(f"{path}: shorter than {minimum_length}")
+    maximum_length = schema.get("maxLength")
+    if isinstance(maximum_length, int) and isinstance(value, str) and len(value) > maximum_length:
+        errors.append(f"{path}: longer than {maximum_length}")
     minimum = schema.get("minimum")
     if (
         isinstance(minimum, (int, float))
@@ -393,6 +437,45 @@ def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: l
         and value < minimum
     ):
         errors.append(f"{path}: expected minimum {minimum}")
+
+    variants = schema.get("oneOf")
+    if isinstance(variants, list):
+        matches = 0
+        for variant in variants:
+            variant_errors: list[str] = []
+            if isinstance(variant, dict):
+                _validate_schema(
+                    value, variant, path, variant_errors, one_of_error
+                )
+            else:
+                variant_errors.append(f"{path}: invalid schema variant")
+            if not variant_errors:
+                matches += 1
+        if matches != 1:
+            errors.append(f"{path}: {one_of_error}")
+
+
+def validate_against_schema(
+    data: object, schema: dict[str, object], path: str
+) -> list[str]:
+    errors: list[str] = []
+    _validate_schema(
+        data,
+        schema,
+        path,
+        errors,
+        "expected exactly one oneOf branch",
+    )
+    return errors
+
+
+@lru_cache(maxsize=1)
+def load_target_evidence_schema() -> dict[str, object]:
+    return json.loads(
+        (
+            ROOT / "research/schemas/target-evidence.schema.json"
+        ).read_text(encoding="utf-8")
+    )
 
 
 def _absolute_path(path: str) -> bool:
@@ -543,4 +626,182 @@ def validate_source_index(
 
     if data["content_digest"] != _materialized_digest(data):
         errors.append("index.content_digest: does not match materialized content")
+    return errors
+
+
+def validate_evidence(
+    data: object,
+    registry: dict[str, Snapshot],
+    target_index: dict[str, object],
+    ledger_ids: set[str],
+    root: Path = ROOT,
+) -> list[str]:
+    errors = validate_against_schema(
+        data, load_target_evidence_schema(), "evidence"
+    )
+    if errors:
+        return errors
+
+    assert isinstance(data, dict)
+    files = {row["path"]: row for row in target_index["files"]}
+    seen: set[str] = set()
+    for index, row in enumerate(data["records"]):
+        prefix = f"evidence.records[{index}]"
+        evidence_id = row["evidence_id"]
+        if evidence_id in seen:
+            errors.append(f"{prefix}.evidence_id: duplicate {evidence_id}")
+        seen.add(evidence_id)
+
+        for source_id in row["source_ids"]:
+            if source_id not in ledger_ids:
+                errors.append(f"{prefix}.source_ids: unknown {source_id}")
+        for decision_ref in row["decision_refs"]:
+            if decision_ref not in DECISION_REFS:
+                errors.append(
+                    f"{prefix}.decision_refs: disallowed {decision_ref}"
+                )
+            elif not (root / decision_ref).is_file():
+                errors.append(f"{prefix}.decision_refs: missing {decision_ref}")
+
+        if row["path"] is not None:
+            file_row = files.get(row["path"])
+            if file_row is None:
+                errors.append(f"{prefix}.path: not in target index")
+            elif row["start_line"] is None and file_row["kind"] != "binary":
+                errors.append(
+                    f"{prefix}.path: file-only evidence requires indexed binary"
+                )
+            elif row["start_line"] is not None and file_row["line_count"] is None:
+                errors.append(f"{prefix}.path: binary file cannot have line range")
+            elif (
+                row["end_line"] is not None
+                and row["end_line"] > file_row["line_count"]
+            ):
+                errors.append(
+                    f"{prefix}.end_line: exceeds {row['path']} line_count"
+                )
+            if (
+                row["start_line"] is not None
+                and row["start_line"] > row["end_line"]
+            ):
+                errors.append(f"{prefix}: start_line exceeds end_line")
+            target_snapshot = target_index["snapshot"]["snapshot_id"]
+            if row["snapshot_id"] != target_snapshot:
+                errors.append(
+                    f"{prefix}.snapshot_id: expected target snapshot "
+                    f"{target_snapshot}"
+                )
+    return errors
+
+
+def load_evidence(path: Path) -> dict[str, Evidence]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+    target_index = json.loads(
+        (
+            ROOT / "research/indexes/qwen3-tts-022e286b.json"
+        ).read_text(encoding="utf-8")
+    )
+    with (ROOT / "research/source-ledger.csv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
+        ledger_ids = {
+            row["source_id"] for row in csv.DictReader(handle)
+        }
+    errors = validate_evidence(data, registry, target_index, ledger_ids, ROOT)
+    if errors:
+        raise ValueError("invalid target evidence:\n" + "\n".join(errors))
+
+    return {
+        row["evidence_id"]: Evidence(
+            evidence_id=row["evidence_id"],
+            snapshot_id=row["snapshot_id"],
+            path=row["path"],
+            start_line=row["start_line"],
+            end_line=row["end_line"],
+            state=row["state"],
+            claim=row["claim"],
+            quote=row["quote"],
+            source_ids=tuple(row["source_ids"]),
+            decision_refs=tuple(row["decision_refs"]),
+        )
+        for row in data["records"]
+    }
+
+
+def fixed_url(
+    row: Evidence, registry: dict[str, Snapshot]
+) -> str | None:
+    if row.snapshot_id is None or row.path is None:
+        return None
+    template = registry[row.snapshot_id].blob_url_template
+    if row.start_line is None:
+        return template.split("#", 1)[0].format(path=row.path)
+    return template.format(
+        path=row.path, start=row.start_line, end=row.end_line
+    )
+
+
+def validate_target_coverage(
+    index: dict[str, object],
+    rows: Path | list[dict[str, str]],
+    evidence: dict[str, Evidence] | None = None,
+    page_catalog: list[dict[str, object]] | None = None,
+) -> list[str]:
+    if evidence is None:
+        evidence = load_evidence(ROOT / "research/target-evidence.json")
+    if isinstance(rows, Path):
+        with rows.open(encoding="utf-8", newline="") as handle:
+            csv_rows = list(csv.DictReader(handle))
+    else:
+        csv_rows = list(rows)
+
+    errors: list[str] = []
+    expected = collections.Counter(row["path"] for row in index["files"])
+    actual = collections.Counter(row.get("path", "") for row in csv_rows)
+    for path in sorted((expected - actual).elements()):
+        errors.append(f"target coverage: missing {path}")
+    for path in sorted((actual - expected).elements()):
+        errors.append(f"target coverage: unexpected or duplicate {path}")
+
+    known = set(evidence)
+    catalog = None
+    if page_catalog is not None:
+        catalog = {
+            page["slug"]: {
+                section["id"] for section in page["sections"]
+            }
+            for page in page_catalog
+        }
+    for index_number, row in enumerate(csv_rows):
+        prefix = f"coverage[{index_number}] {row.get('path', '')}"
+        disposition = row.get("disposition", "")
+        page = row.get("page", "")
+        section = row.get("section", "")
+        if disposition not in DISPOSITIONS:
+            errors.append(f"{prefix}: invalid disposition {disposition}")
+        if disposition in {"mapped", "pending"} and (
+            not page or not section
+        ):
+            errors.append(f"{prefix}: page and section required")
+        if disposition in {"excluded", "pending"} and not row.get("reason"):
+            errors.append(f"{prefix}: reason required")
+        for evidence_id in filter(
+            None, row.get("evidence_ids", "").split("|")
+        ):
+            if evidence_id not in known:
+                errors.append(f"{prefix}: unknown evidence {evidence_id}")
+        if (
+            catalog is not None
+            and disposition in {"mapped", "pending"}
+            and page
+            and section
+        ):
+            if (
+                page not in catalog
+                or section not in catalog[page]
+            ):
+                errors.append(
+                    f"{prefix}: missing section {page}#{section}"
+                )
     return errors

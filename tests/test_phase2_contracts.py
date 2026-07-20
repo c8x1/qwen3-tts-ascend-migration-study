@@ -1,11 +1,19 @@
 import collections
+import contextlib
 import copy
+import csv
+import io
 import json
+import re
+import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import FrozenInstanceError
 from pathlib import Path
+from unittest.mock import patch
 
+from scripts import phase2_contracts as contracts
 from scripts.phase2_contracts import (
     Snapshot,
     _materialized_digest,
@@ -14,6 +22,7 @@ from scripts.phase2_contracts import (
     validate_snapshot_registry,
     validate_source_index,
 )
+from scripts import validate_phase2 as validate_phase2_cli
 from scripts.validate_phase2 import validate_indexes
 
 
@@ -71,6 +80,61 @@ def valid_minimal_index(*, snapshot):
 
 def refresh_materialized_digest(data):
     data["content_digest"] = _materialized_digest(data)
+
+
+def registry():
+    return load_snapshot_registry(ROOT / "research/source-snapshots.json")
+
+
+def target_index():
+    return json.loads(
+        (ROOT / "research/indexes/qwen3-tts-022e286b.json").read_text(
+            encoding="utf-8"
+        )
+    )
+
+
+def ledger_ids():
+    with (ROOT / "research/source-ledger.csv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
+        return {row["source_id"] for row in csv.DictReader(handle)}
+
+
+def valid_evidence_document():
+    def source_record(evidence_id, path):
+        return {
+            "evidence_id": evidence_id,
+            "snapshot_id": "qwen3-tts-022e286b",
+            "path": path,
+            "start_line": 1,
+            "end_line": 2,
+            "state": "verified",
+            "claim": "claim",
+            "quote": "",
+            "source_ids": ["SRC-001"],
+            "decision_refs": [],
+        }
+
+    return {
+        "schema_version": 1,
+        "records": [
+            source_record("E-1", "pyproject.toml"),
+            source_record("E-2", "LICENSE"),
+            {
+                "evidence_id": "E-3",
+                "snapshot_id": None,
+                "path": None,
+                "start_line": None,
+                "end_line": None,
+                "state": "inference",
+                "claim": "decision",
+                "quote": "",
+                "source_ids": ["SRC-019"],
+                "decision_refs": ["research/reference-selection-proposal.md"],
+            },
+        ],
+    }
 
 
 class SnapshotRegistryTests(unittest.TestCase):
@@ -332,6 +396,7 @@ class SourceIndexContractTests(unittest.TestCase):
             (lambda d: d["files"][0].__setitem__("sha256", "ABC"), "index.files[0].sha256: does not match pattern"),
             (lambda d: d["files"][0].__setitem__("bytes", -1), "index.files[0].bytes: expected minimum 0"),
             (lambda d: d["symbols"][0].__setitem__("line", 0), "index.symbols[0].line: expected minimum 1"),
+            (lambda d: d["files"][0].__setitem__("line_count", "8"), "index.files[0].line_count: expected exactly one allowed shape"),
         ]
         for mutate, expected in cases:
             with self.subTest(expected=expected):
@@ -558,6 +623,369 @@ class SourceIndexContractTest(unittest.TestCase):
                     errors,
                 )
                 self.assertTrue(all("\n" not in error for error in errors))
+
+
+class TargetCoverageTest(unittest.TestCase):
+    def setUp(self):
+        # Keep the first TDD failure tied to the absent contract artifacts rather
+        # than to target APIs that do not exist before the GREEN implementation.
+        (ROOT / "research/target-coverage.csv").read_bytes()
+        (ROOT / "research/target-evidence.json").read_bytes()
+
+    def load_evidence(self):
+        return contracts.load_evidence(ROOT / "research/target-evidence.json")
+
+    def test_every_target_file_has_exactly_one_disposition(self):
+        errors = contracts.validate_target_coverage(
+            target_index(), ROOT / "research/target-coverage.csv"
+        )
+        self.assertEqual(errors, [])
+
+        with (ROOT / "research/target-coverage.csv").open(
+            encoding="utf-8", newline=""
+        ) as handle:
+            rows = list(csv.DictReader(handle))
+        self.assertEqual(
+            list(rows[0]),
+            ["path", "disposition", "page", "section", "evidence_ids", "reason"],
+        )
+        self.assertEqual(len(rows), 35)
+        self.assertEqual(
+            [row["path"] for row in rows],
+            [row["path"] for row in target_index()["files"]],
+        )
+
+    def test_default_and_explicit_evidence_coverage_calls_are_identical(self):
+        evidence = self.load_evidence()
+        with (ROOT / "research/target-coverage.csv").open(
+            encoding="utf-8", newline=""
+        ) as handle:
+            rows = list(csv.DictReader(handle))
+        rows[0]["evidence_ids"] = "UNKNOWN-EVIDENCE"
+        default_errors = contracts.validate_target_coverage(target_index(), rows)
+        explicit_errors = contracts.validate_target_coverage(
+            target_index(), rows, evidence=evidence
+        )
+        self.assertEqual(default_errors, explicit_errors)
+        self.assertIn(
+            "coverage[0] .github/ISSUE_TEMPLATE/bug_report.yml: unknown evidence UNKNOWN-EVIDENCE",
+            default_errors,
+        )
+
+    def test_coverage_catalog_missing_fields_returns_error_without_raising(self):
+        index = {"files": [{"path": "pkg.py"}]}
+        rows = [
+            {
+                "path": "pkg.py",
+                "disposition": "mapped",
+                "evidence_ids": "",
+                "reason": "",
+            }
+        ]
+        self.assertEqual(
+            ["coverage[0] pkg.py: page and section required"],
+            contracts.validate_target_coverage(
+                index, rows, evidence={}, page_catalog=[]
+            ),
+        )
+
+    def test_evidence_has_four_states_bounded_quotes_and_tuple_arrays(self):
+        evidence = self.load_evidence()
+        self.assertEqual(
+            {row.state for row in evidence.values()},
+            {"verified", "project_claim", "inference", "pending_hardware"},
+        )
+        self.assertTrue(
+            all(
+                len(row.quote) <= 240 and row.quote.count("\n") < 8
+                for row in evidence.values()
+            )
+        )
+        self.assertTrue(all(isinstance(row.source_ids, tuple) for row in evidence.values()))
+        self.assertTrue(
+            all(isinstance(row.decision_refs, tuple) for row in evidence.values())
+        )
+        with self.assertRaises(FrozenInstanceError):
+            next(iter(evidence.values())).claim = "changed"
+
+    def test_evidence_ranges_exist_in_index_and_quotes_match_fixed_lines(self):
+        excerpts = json.loads(
+            (
+                ROOT / "tests/fixtures/evidence/qwen3-tts-excerpts.json"
+            ).read_text(encoding="utf-8")
+        )
+        evidence = self.load_evidence()
+        quoted = {
+            evidence_id for evidence_id, row in evidence.items() if row.quote
+        }
+        self.assertEqual(quoted, set(excerpts))
+        self.assertEqual(len(quoted), 4)
+        for evidence_id, lines in excerpts.items():
+            row = evidence[evidence_id]
+            self.assertTrue(row.quote)
+            self.assertEqual(lines["path"], row.path)
+            self.assertEqual(
+                [lines["start_line"], lines["end_line"]],
+                [row.start_line, row.end_line],
+            )
+            self.assertEqual(
+                len(lines["lines"]), lines["end_line"] - lines["start_line"] + 1
+            )
+            self.assertIn(row.quote, "\n".join(lines["lines"]))
+
+    def test_all_source_ids_exist_in_phase1_ledger(self):
+        known = ledger_ids()
+        for row in self.load_evidence().values():
+            self.assertTrue(row.source_ids)
+            self.assertLessEqual(set(row.source_ids), known)
+
+    def test_evidence_rejects_reversed_range_wrong_snapshot_and_bad_decision_ref(self):
+        data = valid_evidence_document()
+        data["records"][0].update({"start_line": 8, "end_line": 7})
+        data["records"][1]["snapshot_id"] = "moss-tts-ad99ec5f"
+        data["records"][2]["decision_refs"] = ["/tmp/decision.md"]
+        errors = contracts.validate_evidence(
+            data, registry(), target_index(), ledger_ids(), ROOT
+        )
+        self.assertIn("evidence.records[0]: start_line exceeds end_line", errors)
+        self.assertIn(
+            "evidence.records[1].snapshot_id: expected target snapshot qwen3-tts-022e286b",
+            errors,
+        )
+        self.assertIn(
+            "evidence.records[2].decision_refs: disallowed /tmp/decision.md",
+            errors,
+        )
+
+    def test_evidence_schema_rejects_container_and_list_contracts(self):
+        mutations = [
+            (
+                lambda row: row.update(source_ids=[]),
+                "evidence.records[0].source_ids: fewer than 1 items",
+            ),
+            (
+                lambda row: row.update(source_ids=["SRC-001", "SRC-001"]),
+                "evidence.records[0].source_ids: duplicate item",
+            ),
+            (
+                lambda row: row.update(source_ids=["source-1"]),
+                "evidence.records[0].source_ids[0]: does not match pattern ^SRC-[0-9]{3}$",
+            ),
+            (
+                lambda row: row.update(quote="x" * 241),
+                "evidence.records[0].quote: longer than 240",
+            ),
+            (
+                lambda row: row.update(claim=""),
+                "evidence.records[0].claim: shorter than 1",
+            ),
+            (
+                lambda row: row.update(claim="x" * 501),
+                "evidence.records[0].claim: longer than 500",
+            ),
+            (
+                lambda row: row.update(start_line=None),
+                "evidence.records[0]: expected exactly one oneOf branch",
+            ),
+            (
+                lambda row: row.update(extra=True),
+                "evidence.records[0]: unknown field extra",
+            ),
+            (
+                lambda row: row.update(
+                    decision_refs=[
+                        "research/reference-selection-proposal.md",
+                        "research/reference-selection-proposal.md",
+                    ]
+                ),
+                "evidence.records[0].decision_refs: duplicate item",
+            ),
+            (
+                lambda row: row.update(decision_refs=[""]),
+                "evidence.records[0].decision_refs[0]: shorter than 1",
+            ),
+        ]
+        for mutate, expected in mutations:
+            with self.subTest(expected=expected):
+                data = valid_evidence_document()
+                mutate(data["records"][0])
+                self.assertIn(
+                    expected,
+                    contracts.validate_evidence(
+                        data, registry(), target_index(), ledger_ids(), ROOT
+                    ),
+                )
+
+    def test_evidence_schema_validation_is_total_for_malformed_values(self):
+        for malformed in (None, [], "evidence", 1, True):
+            with self.subTest(malformed=malformed):
+                self.assertEqual(
+                    ["evidence: expected object"],
+                    contracts.validate_evidence(
+                        malformed, registry(), target_index(), ledger_ids(), ROOT
+                    ),
+                )
+
+        cases = [
+            (
+                lambda data: data.__setitem__("records", {}),
+                "evidence.records: expected array",
+            ),
+            (
+                lambda data: data["records"].__setitem__(0, None),
+                "evidence.records[0]: expected object",
+            ),
+            (
+                lambda data: data["records"][0].update(evidence_id="bad id"),
+                "evidence.records[0].evidence_id: does not match pattern ^[A-Z0-9-]+$",
+            ),
+            (
+                lambda data: data["records"][0].update(start_line=0),
+                "evidence.records[0].start_line: expected minimum 1",
+            ),
+        ]
+        for mutate, expected in cases:
+            with self.subTest(expected=expected):
+                data = valid_evidence_document()
+                mutate(data)
+                self.assertIn(
+                    expected,
+                    contracts.validate_evidence(
+                        data, registry(), target_index(), ledger_ids(), ROOT
+                    ),
+                )
+
+    def test_evidence_semantics_cover_source_file_and_ledger_shapes(self):
+        unknown_source = valid_evidence_document()
+        unknown_source["records"][0]["source_ids"] = ["SRC-999"]
+        self.assertIn(
+            "evidence.records[0].source_ids: unknown SRC-999",
+            contracts.validate_evidence(
+                unknown_source, registry(), target_index(), ledger_ids(), ROOT
+            ),
+        )
+
+        missing_path = valid_evidence_document()
+        missing_path["records"][0]["path"] = "missing.py"
+        self.assertIn(
+            "evidence.records[0].path: not in target index",
+            contracts.validate_evidence(
+                missing_path, registry(), target_index(), ledger_ids(), ROOT
+            ),
+        )
+
+        text_file_only = valid_evidence_document()
+        text_file_only["records"][0].update(start_line=None, end_line=None)
+        self.assertIn(
+            "evidence.records[0].path: file-only evidence requires indexed binary",
+            contracts.validate_evidence(
+                text_file_only, registry(), target_index(), ledger_ids(), ROOT
+            ),
+        )
+
+        binary_range = valid_evidence_document()
+        binary_range["records"][0]["path"] = (
+            "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz"
+        )
+        self.assertIn(
+            "evidence.records[0].path: binary file cannot have line range",
+            contracts.validate_evidence(
+                binary_range, registry(), target_index(), ledger_ids(), ROOT
+            ),
+        )
+
+        too_long = valid_evidence_document()
+        too_long["records"][0]["end_line"] = 47
+        self.assertIn(
+            "evidence.records[0].end_line: exceeds pyproject.toml line_count",
+            contracts.validate_evidence(
+                too_long, registry(), target_index(), ledger_ids(), ROOT
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertIn(
+                "evidence.records[2].decision_refs: missing research/reference-selection-proposal.md",
+                contracts.validate_evidence(
+                    valid_evidence_document(),
+                    registry(),
+                    target_index(),
+                    ledger_ids(),
+                    Path(directory),
+                ),
+            )
+
+    def test_fixed_urls_anchor_text_not_binary_and_ledger_has_no_source_url(self):
+        evidence = self.load_evidence()
+        snapshots = registry()
+        text_url = contracts.fixed_url(evidence["TGT-API-001"], snapshots)
+        self.assertEqual(
+            text_url,
+            "https://github.com/QwenLM/Qwen3-TTS/blob/"
+            "022e286b98fbec7e1e916cb940cdf532cd9f488e/"
+            "qwen_tts/inference/qwen3_tts_model.py#L83-L121",
+        )
+        binary_url = contracts.fixed_url(evidence["TGT-TOK25-014"], snapshots)
+        self.assertEqual(
+            binary_url,
+            "https://github.com/QwenLM/Qwen3-TTS/blob/"
+            "022e286b98fbec7e1e916cb940cdf532cd9f488e/"
+            "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz",
+        )
+        self.assertIsNone(contracts.fixed_url(evidence["PH1-ROLE-MM"], snapshots))
+
+    def test_phase2_cli_preserves_indexes_only_and_reports_dynamic_counts(self):
+        indexes = subprocess.run(
+            ["python3", "scripts/validate_phase2.py", "--indexes-only"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(indexes.returncode, 0, indexes.stdout + indexes.stderr)
+        self.assertEqual(
+            indexes.stdout,
+            "validated 4 source indexes: 3270 files; no absolute paths or source bodies\n",
+        )
+
+        combined = subprocess.run(
+            ["python3", "scripts/validate_phase2.py"],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        self.assertEqual(combined.returncode, 0, combined.stdout + combined.stderr)
+        match = re.fullmatch(
+            r"validated Phase 2 data: 4 indexes, (\d+) evidence records, "
+            r"35 target coverage rows, 0 omissions\n",
+            combined.stdout,
+        )
+        self.assertIsNotNone(match, combined.stdout)
+        self.assertEqual(int(match.group(1)), len(self.load_evidence()))
+
+    def test_phase2_default_stops_when_index_validation_fails(self):
+        output = io.StringIO()
+        with (
+            patch.object(
+                validate_phase2_cli,
+                "validate_indexes",
+                return_value=["qwen3-tts-022e286b.json: index.files: expected array"],
+            ),
+            patch.object(
+                validate_phase2_cli,
+                "load_evidence",
+                side_effect=AssertionError("evidence validation must not run"),
+            ) as evidence_loader,
+            patch.object(sys, "argv", ["validate_phase2.py"]),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(1, validate_phase2_cli.main())
+        evidence_loader.assert_not_called()
+        self.assertEqual(
+            "qwen3-tts-022e286b.json: index.files: expected array\n",
+            output.getvalue(),
+        )
 
 
 if __name__ == "__main__":

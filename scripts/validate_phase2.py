@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import argparse
+import csv
 import hashlib
 import json
 import sys
@@ -8,7 +9,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from scripts.phase2_contracts import load_snapshot_registry, validate_source_index
+from scripts.phase2_contracts import (
+    load_evidence,
+    load_snapshot_registry,
+    validate_source_index,
+    validate_target_coverage,
+)
 
 
 def _expected_snapshot(snapshot) -> dict[str, object]:
@@ -102,12 +108,50 @@ def validate_indexes(root: Path = ROOT) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--indexes-only", action="store_true")
-    parser.parse_args()
+    args = parser.parse_args()
     errors = validate_indexes()
     if errors:
         print("\n".join(errors))
         return 1
-    print("validated 4 source indexes: 3270 files; no absolute paths or source bodies")
+    if args.indexes_only:
+        print("validated 4 source indexes: 3270 files; no absolute paths or source bodies")
+        return 0
+
+    evidence = None
+    evidence_path = ROOT / "research/target-evidence.json"
+    try:
+        evidence = load_evidence(evidence_path)
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+        errors.append(str(error))
+
+    coverage_rows: list[dict[str, str]] = []
+    coverage_path = ROOT / "research/target-coverage.csv"
+    try:
+        with coverage_path.open(encoding="utf-8", newline="") as handle:
+            coverage_rows = list(csv.DictReader(handle))
+        if evidence is not None:
+            target = json.loads(
+                (
+                    ROOT / "research/indexes/qwen3-tts-022e286b.json"
+                ).read_text(encoding="utf-8")
+            )
+            errors.extend(
+                validate_target_coverage(
+                    target, coverage_rows, evidence=evidence
+                )
+            )
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        errors.append(str(error))
+
+    if errors:
+        print("\n".join(errors))
+        return 1
+    evidence_count = len(evidence)
+    print(
+        "validated Phase 2 data: 4 indexes, "
+        f"{evidence_count} evidence records, {len(coverage_rows)} target "
+        "coverage rows, 0 omissions"
+    )
     return 0
 
 
