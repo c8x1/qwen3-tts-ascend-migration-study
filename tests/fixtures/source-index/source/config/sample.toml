@@ -1,0 +1,4 @@
+[model]
+name = "fixture"
+[training]
+precision = "bf16"
