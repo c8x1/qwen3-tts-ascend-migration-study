@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="连接文本 Processor 与音频 tokenizer wrapper，明确输入归一化、shape/sample-rate 元数据以及 x-vector-only 与 ICL 的差异。">
+  <title>Processor 输入与提示词契约 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">Processor 输入与提示词契约</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a class="active" aria-current="page" href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-architecture / 6</p>
+        <h1>Processor 输入与提示词契约</h1>
+        <p class="lead">连接文本 Processor 与音频 tokenizer wrapper，明确输入归一化、shape/sample-rate 元数据以及 x-vector-only 与 ICL 的差异。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>解释 Qwen3TTSProcessor 如何产生 Qwen tokenizer/ChatML 的 BatchFeature</li><li>追踪 URL、路径、base64 与数组音频到 encode/decode 的归一化顺序</li><li>区分 x-vector-only 与 ICL text+audio 提示词契约而不作运行声明</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与自回归生成</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="text-contract"><h2>文本：Qwen tokenizer、ChatML 与 BatchFeature</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSProcessor 包装 Qwen tokenizer：__call__ 把单条文本归一为列表并返回包含文本 ids 等 tokenizer 字段的 BatchFeature；apply_chat_template 负责 ChatML 对话格式入口。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">职责</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>文本 Processor</td><td>qwen_tts/core/models/processing_qwen3_tts.py</td><td>L27–L103</td></tr><tr><td>音频 tokenizer wrapper</td><td>qwen_tts/inference/qwen3_tts_tokenizer.py</td><td>L44–L410</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-PROC-001">证据 TGT-PROC-001</a></li></ul></section><section id="audio-wrapper"><h2>音频输入归一化与包装器</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>输入归一化</strong><code>qwen_tts/inference/qwen3_tts_tokenizer.py</code><span>Qwen3TTSTokenizer._normalize_audio_inputs</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>文本与 ChatML</strong><code>qwen_tts/core/models/processing_qwen3_tts.py</code><span>Qwen3TTSProcessor</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>音频编码</strong><code>qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py</code><span>Qwen3TTSTokenizerV2Model.encode</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>提示词分支</strong><code>qwen_tts/inference/qwen3_tts_model.py</code><span>x-vector-only / ICL text+audio</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSTokenizer wrapper 将 URL、文件路径、base64 字符串或 numpy array 归一为目标 sample rate 的一维 float32 波形，再交给 feature extractor 与模型 encode；decode 将 ModelOutput/dict/list[dict] 归一后返回波形列表与输出 sample rate。</p><ul class="source-refs"><li><a href="#evidence-TGT-PROC-002">证据 TGT-PROC-002</a></li></ul></section><section id="shape-contract"><h2>Shape 与 sample-rate 元数据</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 文本侧输出 ids/attention 等 BatchFeature 字段；12Hz 音频侧单样本 codes 的教学形状是 (T,16)。wrapper 还显式暴露 input/output sample rate、encode downsample rate 与 decode upsample rate；这些元数据用于解释 shape，不代表执行结果。</p><ul class="source-refs"><li><a href="#evidence-TGT-PROC-001">证据 TGT-PROC-001</a></li><li><a href="#evidence-TGT-PROC-002">证据 TGT-PROC-002</a></li></ul></section><section id="prompt-contract"><h2>x-vector-only 与 ICL text+audio</h2><p><span class="evidence-state" data-state="project_claim">状态：项目声明</span> 输入契约上，x-vector-only 分支只携带说话人向量条件；ICL text+audio 分支同时组织参考文本与参考音频产生的离散 codes。两者不能因都涉及参考说话人而合并，也不能据静态契约声称任一路径已经运行。</p><ul class="source-refs"><li><a href="#evidence-TGT-PROC-001">证据 TGT-PROC-001</a></li><li><a href="#evidence-TGT-PROC-002">证据 TGT-PROC-002</a></li></ul></section><section id="migration-boundary"><h2>状态与迁移边界</h2><p><span class="evidence-state" data-state="project_claim">状态：项目声明</span> 本页只陈述文本/音频的静态输入输出契约；未执行权重装载、音频编码、提示词生成或设备验证，也不提供设备兼容性结论。</p></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="tokenizer-25hz.html">← 上一页：25Hz Tokenizer 静态依赖图</a><a rel="next" href="../indexes/source-files.html">下一页：四个固定快照文件索引 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#text-contract">文本：Qwen tokenizer、ChatML 与 BatchFeature</a><a data-rail-content href="#audio-wrapper">音频输入归一化与包装器</a><a data-rail-content href="#shape-contract">Shape 与 sample-rate 元数据</a><a data-rail-content href="#prompt-contract">x-vector-only 与 ICL text+audio</a><a data-rail-content href="#migration-boundary">状态与迁移边界</a></section><section id="evidence-TGT-PROC-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-PROC-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>processor wraps Qwen tokenizer/ChatML text behavior</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/processing_qwen3_tts.py#L27-L103">固定源码 qwen_tts/core/models/processing_qwen3_tts.py · L27–L103 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-PROC-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-PROC-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>12Hz/25Hz audio wrapper normalizes, encodes, decodes and exposes sample-rate contracts</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_tokenizer.py#L44-L410">固定源码 qwen_tts/inference/qwen3_tts_tokenizer.py · L44–L410 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>

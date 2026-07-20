@@ -384,7 +384,7 @@ def _render_evidence_card(
     parts = [
         f'<section id="evidence-{_escape(evidence_id)}" class="rail-card evidence-card" data-rail-card>',
         f"<h2>{_escape(evidence_id)}</h2>",
-        f'<p data-rail-content><span class="evidence-state" data-state="{_escape(row.state)}">状态：{_escape(state)}</span></p>',
+        f'<p data-rail-content><span class="evidence-state" data-state="{_escape(row.state)}" data-evidence-state="{_escape(row.state)}">状态：{_escape(state)}</span></p>',
         f"<p data-rail-content>{_escape(row.claim)}</p>",
     ]
     if row.quote:
@@ -412,7 +412,7 @@ def _render_evidence_card(
             f"决策记录 {_escape(decision_ref)}</a>"
         )
     parts.append("</section>")
-    return "".join(parts)
+    return "\n".join(parts)
 
 
 def render_page(page, navigation, evidence, search_documents) -> str:

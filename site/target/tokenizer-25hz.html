@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="逐文件拆解 25Hz tokenizer 的编码、VQ、Whisper attention、DiT 与 BigVGAN，同时保留公开 checkpoint 的 pending_hardware 边界。">
+  <title>25Hz Tokenizer 静态依赖图 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">25Hz Tokenizer 静态依赖图</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a class="active" aria-current="page" href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-architecture / 5</p>
+        <h1>25Hz Tokenizer 静态依赖图</h1>
+        <p class="lead">逐文件拆解 25Hz tokenizer 的编码、VQ、Whisper attention、DiT 与 BigVGAN，同时保留公开 checkpoint 的 pending_hardware 边界。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>沿固定路径解释 encoder、VQ 与 waveform decoder 的静态组合</li><li>分别定位 CAMPPlus、SoX、ONNX Runtime、Kaldi 与 Whisper attention 依赖</li><li>区分已证实的源码事实和公开 checkpoint 可执行性的 unknown 状态</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与自回归生成</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="asset-inventory"><h2>公开资产盘点</h2><p><span class="evidence-state" data-state="pending_hardware">状态：待真机验证</span> 待真机验证：公开可执行性 unknown。官方源码、报告与 collections 没有建立一个固定的公开可执行 25Hz checkpoint，因此源码类存在不能替代 checkpoint 身份与可执行性验证。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">组件</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>复合 tokenizer</td><td>qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py</td><td>L996–L1526</td></tr><tr><td>Speech VQ 依赖</td><td>qwen_tts/core/tokenizer_25hz/vq/speech_vq.py</td><td>L16–L150</td></tr><tr><td>Whisper attention</td><td>qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py</td><td>L29–L191</td></tr><tr><td>VQ 核心</td><td>qwen_tts/core/tokenizer_25hz/vq/core_vq.py</td><td>L113–L521</td></tr><tr><td>主模型资源装载</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L1891–L1936</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-002">证据 TGT-TOK25-002</a></li></ul></section><section id="encoder-vq"><h2>复合 encode/decode 接线</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>Tokenizer 入口</strong><code>qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py</code><span>Qwen3TTSTokenizerV1Model</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>编码与量化</strong><code>qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py</code><span>Qwen3TTSTokenizerV1Encoder</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>VQ 核心</strong><code>qwen_tts/core/tokenizer_25hz/vq/core_vq.py</code><span>DistributedGroupResidualVectorQuantization</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>解码与波形</strong><code>qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py</code><span>Qwen3TTSTokenizerV1Decoder</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> 已证实：静态依赖与源码路径。Qwen3TTSTokenizerV1Model 组合 encoder、x-vector extractor、VQ decoder 与 waveform decoder；encode/decode 的调用接线位于固定源码范围。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-012">证据 TGT-TOK25-012</a></li><li><a href="#evidence-TGT-TOK25-013">证据 TGT-TOK25-013</a></li></ul></section><section id="campplus-dependency"><h2>CAMPPlus 资产依赖</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSTokenizerV1Model.from_pretrained 会解析 campplus.onnx 路径并装载它；这是固定源码中的资产依赖，不证明对应文件在任意外部 checkpoint 中都存在。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-003">证据 TGT-TOK25-003</a></li></ul></section><section id="speech-vq-dependencies"><h2>Speech VQ 外部依赖</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> speech_vq.py 直接导入 SoX、ONNX Runtime、Kaldi compliance、VQ 与 Whisper 模块；x-vector 提取静态路径指定 ONNX CPUExecutionProvider，并包含 SoX 归一化与 Kaldi fbank。这里逐文件归属，不把所有 VQ 文件笼统归到主模型证据。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-004">证据 TGT-TOK25-004</a></li><li><a href="#evidence-TGT-TOK25-005">证据 TGT-TOK25-005</a></li></ul></section><section id="whisper-attention"><h2>Whisper attention 分支</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> whisper_encoder.py 对 flash-attn 导入提供手写 PyTorch fallback；当 flash-attn 缺失或 dtype 不是 FP16/BF16 时，attention 进入该手写路径。此处只描述目标源码的分支条件。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-006">证据 TGT-TOK25-006</a></li><li><a href="#evidence-TGT-TOK25-007">证据 TGT-TOK25-007</a></li></ul></section><section id="vq-core"><h2>VQ 核心实现</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> core_vq.py 分别给出 Euclidean codebook 的 quantize/dequantize 与 residual/group residual VQ 的 encode/decode；这些实现由 TGT-TOK25-009/010 的专属文件证据支撑。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-009">证据 TGT-TOK25-009</a></li><li><a href="#evidence-TGT-TOK25-010">证据 TGT-TOK25-010</a></li></ul></section><section id="dit-bigvgan"><h2>DiT mel 与 BigVGAN 波形解码</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 25Hz modeling 文件中存在 DiT mel sampling 与 BigVGAN waveform decoder 代码；静态存在不等于已取得所需参数或已生成音频。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-001">证据 TGT-TOK25-001</a></li></ul></section><section id="decoder-precision"><h2>FP32 decoder 的 attention 选择</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 目标 tokenizer 源码在 FP32 decoder 场景覆盖 FA2/eager 选择并转向 SDPA fallback；这是一段目标实现的精度/attention 分支，不是迁移建议。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-008">证据 TGT-TOK25-008</a></li></ul></section><section id="main-model-assets"><h2>主模型侧语音资源</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSForConditionalGeneration.from_pretrained 的固定范围装载 speech_tokenizer/*、tokenizer config 与 generation_config.json；该证据只属于主模型资源接线。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK25-011">证据 TGT-TOK25-011</a></li></ul></section><section id="asset-boundary"><h2>状态与可执行性边界</h2><p><span class="evidence-state" data-state="pending_hardware">状态：待真机验证</span> 已证实：静态依赖与源码路径。待真机验证：公开可执行性 unknown。前者由逐文件证据支撑，后者保留 pending_hardware；二者不得合并为运行结论。</p></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="tokenizer-12hz.html">← 上一页：12Hz Tokenizer 契约</a><a rel="next" href="processor-contracts.html">下一页：Processor 输入与提示词契约 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#asset-inventory">公开资产盘点</a><a data-rail-content href="#encoder-vq">复合 encode/decode 接线</a><a data-rail-content href="#campplus-dependency">CAMPPlus 资产依赖</a><a data-rail-content href="#speech-vq-dependencies">Speech VQ 外部依赖</a><a data-rail-content href="#whisper-attention">Whisper attention 分支</a><a data-rail-content href="#vq-core">VQ 核心实现</a><a data-rail-content href="#dit-bigvgan">DiT mel 与 BigVGAN 波形解码</a><a data-rail-content href="#decoder-precision">FP32 decoder 的 attention 选择</a><a data-rail-content href="#main-model-assets">主模型侧语音资源</a><a data-rail-content href="#asset-boundary">状态与可执行性边界</a></section><section id="evidence-TGT-TOK25-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="pending_hardware" data-evidence-state="pending_hardware">状态：待真机验证</span></p>
+<p data-rail-content>official source/report/collections do not establish a fixed public executable 25Hz checkpoint</p>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-003</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-004</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-005</a>
+</section><section id="evidence-TGT-TOK25-012" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-012</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>encoder plus composite tokenizer wiring and rate accessors exist</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L1282-L1394">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L1282–L1394 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-013" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-013</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>composite encode/decode calls encoder, VQ decoder and waveform decoder</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L1444-L1526">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L1444–L1526 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-003" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-003</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>`from_pretrained` resolves `campplus.onnx` and loads it</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L1426-L1440">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L1426–L1440 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-004" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-004</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>speech VQ directly imports SoX, ONNX Runtime, Kaldi compliance and VQ/Whisper modules</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/speech_vq.py#L16-L32">固定源码 qwen_tts/core/tokenizer_25hz/vq/speech_vq.py · L16–L32 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-005" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-005</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>x-vector extraction uses ONNX CPUExecutionProvider plus SoX normalization and Kaldi fbank</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/speech_vq.py#L118-L150">固定源码 qwen_tts/core/tokenizer_25hz/vq/speech_vq.py · L118–L150 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-006" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-006</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>flash-attn import has a manual PyTorch fallback</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py#L29-L36">固定源码 qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py · L29–L36 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-007" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-007</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>attention falls back manually when flash-attn is absent or dtype is not FP16/BF16</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py#L161-L191">固定源码 qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py · L161–L191 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-009" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-009</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>direct Euclidean codebook quantize/dequantize implementation</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/core_vq.py#L113-L231">固定源码 qwen_tts/core/tokenizer_25hz/vq/core_vq.py · L113–L231 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-010" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-010</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>residual/group residual VQ encode/decode implementation</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/vq/core_vq.py#L334-L521">固定源码 qwen_tts/core/tokenizer_25hz/vq/core_vq.py · L334–L521 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>DiT mel sampling and BigVGAN waveform decoder code exists</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L996-L1273">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L996–L1273 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-008" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-008</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>FP32 decoder overrides FA2/eager with SDPA fallback</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L1235-L1253">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L1235–L1253 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK25-011" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK25-011</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>main model loads `speech_tokenizer/*`, tokenizer config and `generation_config.json`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1891-L1936">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1891–L1936 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>

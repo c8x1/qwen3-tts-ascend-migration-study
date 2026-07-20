@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="从包注册、配置常量与 encode/decode 形状理解 12Hz tokenizer，并把 12.5 FPS 算术推断单独标注。">
+  <title>12Hz Tokenizer 契约 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">12Hz Tokenizer 契约</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a class="active" aria-current="page" href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-architecture / 4</p>
+        <h1>12Hz Tokenizer 契约</h1>
+        <p class="lead">从包注册、配置常量与 encode/decode 形状理解 12Hz tokenizer，并把 12.5 FPS 算术推断单独标注。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>定位 Qwen3TTSTokenizerV2Model 的公开导出与 encode/decode 边界</li><li>区分已核验的 24kHz/1920/16 配置与 12.5 FPS 算术推断</li><li>说明 split RVQ 与 causal/chunked decoder 的静态职责</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与自回归生成</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="package-tokenizer-registry"><h2>包内 tokenizer 注册面</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> qwen_tts.core 同时导出 12Hz/25Hz tokenizer 配置与模型类；本页沿 Qwen3TTSTokenizerV2Model 分支继续阅读。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">职责</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>包导出</td><td>qwen_tts/core/__init__.py</td><td>L16–L19</td></tr><tr><td>12Hz 配置</td><td>qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py</td><td>L137–L169</td></tr><tr><td>12Hz encode/decode 与 RVQ</td><td>qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py</td><td>L780–L1024</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-PKG-002">证据 TGT-PKG-002</a></li></ul></section><section id="configuration"><h2>已核验配置常量</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 配置固定 input sample rate 为 24kHz、encode stride 为 1920 samples，并设置 16 个有效 quantizers；这三个值是源码中的已核验静态配置。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK12-002">证据 TGT-TOK12-002</a></li></ul></section><section id="rate-derivation"><h2>12.5 FPS 是独立推断</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 推断：由已核验配置做算术 24000/1920=12.5 FPS。12.5 FPS 是从 sample rate 与 stride 推导的帧率，不把产品名中的“12Hz”改写成另一个已核验常量。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK12-003">证据 TGT-TOK12-003</a></li></ul></section><section id="encode-contract"><h2>encode：波形到 (T,16)</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>编码入口</strong><code>qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py</code><span>Qwen3TTSTokenizerV2Model.encode</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>残差量化</strong><code>qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py</code><span>SplitResidualVectorQuantizer</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>解码入口</strong><code>qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py</code><span>Qwen3TTSTokenizerV2Model.decode</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSTokenizerV2Model.encode 接收批量波形与 padding mask，裁剪后返回逐样本 audio_codes；结合 16 个有效 quantizers，单样本代码教学形状记为 (T,16)。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK12-001">证据 TGT-TOK12-001</a></li></ul></section><section id="rvq"><h2>Split RVQ</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> SplitResidualVectorQuantizer 把首个语义 quantizer 与其余声学 quantizers 分开，并在 decode 时将两部分量化表示相加。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK12-001">证据 TGT-TOK12-001</a></li></ul></section><section id="decode-contract"><h2>decode：代码到波形</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> decode 接收批量 (B,T,16) audio_codes，经转置进入 causal/chunked decoder，再按有效代码长度与 upsample rate 截取逐样本波形。这里是静态 shape 契约，不是音质或时延结论。</p><ul class="source-refs"><li><a href="#evidence-TGT-TOK12-001">证据 TGT-TOK12-001</a></li></ul></section><section id="training-gap"><h2>状态与训练缺口</h2><p><span class="evidence-state" data-state="project_claim">状态：项目声明</span> 该公开源码树提供 tokenizer 模型与 encode/decode 路径，但本页范围内没有公开 tokenizer 训练生命周期；不能从推理类反推训练数据、目标函数或训练可复现性。</p></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="model-architecture.html">← 上一页：复合模型架构与生成流</a><a rel="next" href="tokenizer-25hz.html">下一页：25Hz Tokenizer 静态依赖图 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#package-tokenizer-registry">包内 tokenizer 注册面</a><a data-rail-content href="#configuration">已核验配置常量</a><a data-rail-content href="#rate-derivation">12.5 FPS 是独立推断</a><a data-rail-content href="#encode-contract">encode：波形到 (T,16)</a><a data-rail-content href="#rvq">Split RVQ</a><a data-rail-content href="#decode-contract">decode：代码到波形</a><a data-rail-content href="#training-gap">状态与训练缺口</a></section><section id="evidence-TGT-PKG-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-PKG-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>package exports both 12Hz and 25Hz tokenizer config/model classes</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/__init__.py#L16-L19">固定源码 qwen_tts/core/__init__.py · L16–L19 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK12-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK12-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>defaults are 24kHz, 1920 sample stride and 16 valid quantizers</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py#L137-L169">固定源码 qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py · L137–L169 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK12-003" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK12-003</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>`24000/1920 = 12.5` frames/s is arithmetic derived from verified defaults, distinct from the “12Hz” name</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py#L147-L169">固定源码 qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py · L147–L169 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TOK12-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TOK12-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>split RVQ, 12Hz model encode/decode and causal/chunked decoder</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py#L780-L1024">固定源码 qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py · L780–L1024 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>
