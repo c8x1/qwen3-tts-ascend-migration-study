@@ -3,7 +3,9 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import os
 import re
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -20,16 +22,26 @@ def discover_files(source_root: Path) -> list[Path]:
         raise ValueError("source root symlink forbidden")
     if not source_root.is_dir():
         raise ValueError(f"source root is not a directory: {source_root}")
+    _reject_descendant_symlinks(source_root)
     files = []
-    for path in source_root.rglob("*"):
-        relative = path.relative_to(source_root)
-        if PRUNED.intersection(relative.parts):
-            continue
-        if path.is_symlink():
-            raise ValueError(f"symlink forbidden: {relative.as_posix()}")
-        if path.is_file():
-            files.append(path)
+    for directory, dirnames, filenames in os.walk(source_root, topdown=True, followlinks=False):
+        dirnames[:] = sorted(name for name in dirnames if name not in PRUNED)
+        for name in sorted(filenames):
+            path = Path(directory) / name
+            if path.is_file():
+                files.append(path)
     return sorted(files, key=lambda path: path.relative_to(source_root).as_posix())
+
+
+def _reject_descendant_symlinks(source_root: Path) -> None:
+    for directory, dirnames, filenames in os.walk(source_root, topdown=True, followlinks=False):
+        dirnames.sort()
+        filenames.sort()
+        for name in sorted(dirnames + filenames):
+            path = Path(directory) / name
+            if path.is_symlink():
+                relative = path.relative_to(source_root)
+                raise ValueError(f"symlink forbidden: {relative.as_posix()}")
 
 
 def sha256_file(path: Path) -> str:
@@ -76,9 +88,17 @@ def config_rows(path: Path, relative: str) -> list[dict[str, object]]:
     if suffix == ".py":
         return python_config_rows(path, relative)
     if suffix == ".json":
-        return nested_config_rows(json.loads(path.read_text(encoding="utf-8")), relative, "json-key")
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return []
+        return nested_config_rows(data, relative, "json-key")
     if suffix == ".toml":
-        return nested_config_rows(tomllib.loads(path.read_text(encoding="utf-8")), relative, "toml-key")
+        try:
+            data = tomllib.loads(path.read_text(encoding="utf-8"))
+        except (UnicodeDecodeError, tomllib.TOMLDecodeError):
+            return []
+        return nested_config_rows(data, relative, "toml-key")
     if suffix in {".yaml", ".yml"}:
         return yaml_config_rows(path, relative)
     return []
@@ -147,8 +167,15 @@ def nested_config_rows(data: object, relative: str, kind: str, prefix: str = "")
 
 def yaml_config_rows(path: Path, relative: str) -> list[dict[str, object]]:
     rows, stack = [], []
+    block_scalar_depth = None
     for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
-        match = re.match(r"^( *)([A-Za-z0-9_.-]+):(?:\s|$)", line)
+        stripped = line.lstrip(" ")
+        depth = len(line) - len(stripped)
+        if block_scalar_depth is not None:
+            if not stripped or depth > block_scalar_depth:
+                continue
+            block_scalar_depth = None
+        match = re.match(r"^( *)([A-Za-z0-9_.-]+):(?:[ \t]+(.*))?$", line)
         if not match or line.lstrip().startswith("#"):
             continue
         depth = len(match.group(1))
@@ -156,6 +183,9 @@ def yaml_config_rows(path: Path, relative: str) -> list[dict[str, object]]:
         stack.append((depth, match.group(2)))
         dotted = ".".join(key for _, key in stack)
         rows.append({"id": f"{relative}:{dotted}:{line_number}", "path": relative, "key": dotted, "owner": ".".join(key for _, key in stack[:-1]), "kind": "yaml-key", "line": line_number})
+        value = (match.group(3) or "").split("#", 1)[0].strip()
+        if re.fullmatch(r"[|>](?:[+-]?[1-9]?|[1-9][+-]?)", value):
+            block_scalar_depth = depth
     return rows
 
 
@@ -184,6 +214,22 @@ def build_index(source_root: Path, snapshot: Snapshot) -> dict[str, object]:
 
 def write_canonical_json(data: object, output: Path) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
-    temporary = output.with_suffix(output.suffix + ".tmp")
-    temporary.write_text(json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8")
-    temporary.replace(output)
+    encoded = (json.dumps(data, ensure_ascii=False, sort_keys=True, indent=2) + "\n").encode("utf-8")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{output.name}.", suffix=".tmp", dir=output.parent
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = -1
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, output)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
