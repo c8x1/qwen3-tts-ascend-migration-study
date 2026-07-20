@@ -169,28 +169,26 @@ def _validate_exact_fields(
     for field in sorted(set(value) - allowed):
         errors.append(f"{path}: unknown field {field}")
     for field in sorted(allowed - set(value)):
-        errors.append(f"{path}: missing required field {field}")
+        errors.append(f"{path}: missing field {field}")
     return set(value) == allowed
 
 
 def validate_snapshot_registry(data: object) -> list[str]:
     """Return deterministic validation errors for an arbitrary JSON value."""
     if not isinstance(data, dict):
-        return ["root: expected object"]
+        return ["registry: expected object"]
 
     errors: list[str] = []
     root_fields = {"schema_version", "snapshots"}
-    _validate_exact_fields(data, root_fields, "root", errors)
+    _validate_exact_fields(data, root_fields, "registry", errors)
 
     version = data.get("schema_version")
-    if not isinstance(version, int) or isinstance(version, bool):
-        errors.append("schema_version: expected integer")
-    elif version != 1:
-        errors.append("schema_version: expected 1")
+    if not isinstance(version, int) or isinstance(version, bool) or version != 1:
+        errors.append("registry.schema_version: expected 1")
 
     rows = data.get("snapshots")
     if not isinstance(rows, list):
-        errors.append("snapshots: expected array")
+        errors.append("registry.snapshots: expected array")
         return errors
 
     seen_ids: set[str] = set()
@@ -214,7 +212,7 @@ def validate_snapshot_registry(data: object) -> list[str]:
             seen_ids.add(snapshot_id)
             observed_ids.add(snapshot_id)
             if approved is None:
-                errors.append(f"{row_path}.snapshot_id: unapproved snapshot ID")
+                errors.append(f"{row_path}.snapshot_id: unapproved {snapshot_id}")
 
         revision = row.get("revision")
         if isinstance(revision, str) and not _HEX40.fullmatch(revision):
@@ -282,7 +280,7 @@ def validate_snapshot_registry(data: object) -> list[str]:
 
     approved_ids = set(_APPROVED)
     if len(rows) != len(_APPROVED) or observed_ids != approved_ids:
-        errors.append(f"snapshots: expected approved IDs {sorted(approved_ids)}")
+        errors.append(f"registry.snapshots: expected approved IDs {sorted(approved_ids)}")
     return errors
 
 
@@ -359,15 +357,15 @@ def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: l
         if isinstance(required, list):
             for field in sorted(item for item in required if isinstance(item, str)):
                 if field not in value:
-                    errors.append(f"{path}: missing required field {field}")
+                    errors.append(f"{path}: missing field {field}")
         if schema.get("additionalProperties") is False:
             for field in sorted(set(value) - set(properties)):
-                label = "forbidden field" if field in _FORBIDDEN_KEYS else "unknown field"
-                errors.append(f"{path}: {label} {field}")
+                if field not in _FORBIDDEN_KEYS:
+                    errors.append(f"{path}: unknown field {field}")
         for field in sorted(set(value) & set(properties)):
             child_schema = properties[field]
             if isinstance(child_schema, dict):
-                child_path = field if path == "root" else f"{path}.{field}"
+                child_path = f"{path}.{field}"
                 _validate_schema(value[field], child_schema, child_path, errors)
 
     if isinstance(value, list):
@@ -399,6 +397,19 @@ def _absolute_path(path: str) -> bool:
     return path.startswith("/") or path.startswith("\\\\") or bool(_WINDOWS_DRIVE.match(path))
 
 
+def _walk_index_policy(value: object, path: str, errors: list[str]) -> None:
+    if isinstance(value, dict):
+        for field in sorted(value):
+            if field in _FORBIDDEN_KEYS:
+                errors.append(f"{path}: forbidden field {field}")
+            _walk_index_policy(value[field], f"{path}.{field}", errors)
+    elif isinstance(value, list):
+        for index, item in enumerate(value):
+            _walk_index_policy(item, f"{path}[{index}]", errors)
+    elif isinstance(value, str) and _absolute_path(value):
+        errors.append(f"{path}: absolute path forbidden")
+
+
 def _materialized_digest(data: object) -> str:
     materialized = dict(data) if isinstance(data, dict) else data
     if isinstance(materialized, dict):
@@ -413,9 +424,7 @@ def _materialized_digest(data: object) -> str:
 
 
 def _check_index_path(path: str, label: str, errors: list[str]) -> None:
-    if _absolute_path(path):
-        errors.append(f"{label}: absolute path is forbidden")
-    elif not _relative_posix(path):
+    if not _absolute_path(path) and not _relative_posix(path):
         errors.append(f"{label}: expected relative POSIX path")
 
 
@@ -437,18 +446,21 @@ def validate_source_index(
 ) -> list[str]:
     """Validate one source index structurally and semantically without raising."""
     if not isinstance(data, dict):
-        return ["root: expected object"]
+        return ["index: expected object"]
 
     errors: list[str] = []
-    _validate_schema(data, load_source_index_schema(), "root", errors)
+    _validate_schema(data, load_source_index_schema(), "index", errors)
+    policy_errors: list[str] = []
+    _walk_index_policy(data, "index", policy_errors)
     if errors:
-        return errors
+        return errors + policy_errors
+    errors.extend(policy_errors)
 
     snapshot_data = data["snapshot"]
     snapshot_id = snapshot_data["snapshot_id"]
     snapshot = registry.get(snapshot_id)
     if snapshot is None:
-        errors.append(f"snapshot.snapshot_id: unknown snapshot {snapshot_id}")
+        errors.append(f"index.snapshot.snapshot_id: unknown snapshot {snapshot_id}")
     else:
         for field in (
             "snapshot_id",
@@ -460,27 +472,29 @@ def validate_source_index(
         ):
             expected = getattr(snapshot, field)
             if snapshot_data[field] != expected:
-                errors.append(f"snapshot.{field}: expected {expected}")
+                errors.append(f"index.snapshot.{field}: expected {expected}")
 
     files = data["files"]
     symbols = data["symbols"]
     configs = data["configs"]
     for index, row in enumerate(files):
-        _check_index_path(row["path"], f"files[{index}].path", errors)
+        _check_index_path(row["path"], f"index.files[{index}].path", errors)
         if row["kind"] == "binary":
             if row["line_count"] is not None:
-                errors.append(f"files[{index}].line_count: binary files require null")
+                errors.append(
+                    f"index.files[{index}].line_count: binary files require null"
+                )
         elif not isinstance(row["line_count"], int):
             errors.append(
-                f"files[{index}].line_count: nonbinary files require an integer"
+                f"index.files[{index}].line_count: nonbinary files require an integer"
             )
     for label, rows in (("symbols", symbols), ("configs", configs)):
         for index, row in enumerate(rows):
-            _check_index_path(row["path"], f"{label}[{index}].path", errors)
+            _check_index_path(row["path"], f"index.{label}[{index}].path", errors)
 
-    _check_sorted_unique(files, "path", "files", errors)
-    _check_sorted_unique(symbols, "id", "symbols", errors)
-    _check_sorted_unique(configs, "id", "configs", errors)
+    _check_sorted_unique(files, "path", "index.files", errors)
+    _check_sorted_unique(symbols, "id", "index.symbols", errors)
+    _check_sorted_unique(configs, "id", "index.configs", errors)
 
     files_by_path: dict[str, dict[str, Any]] = {}
     for row in files:
@@ -489,40 +503,42 @@ def validate_source_index(
     for index, row in enumerate(symbols):
         expected_id = f"{row['path']}:{row['qualname']}:{row['line']}"
         if row["id"] != expected_id:
-            errors.append(f"symbols[{index}].id: expected {expected_id}")
+            errors.append(f"index.symbols[{index}].id: expected {expected_id}")
         if row["line"] > row["end_line"]:
-            errors.append(
-                f"symbols[{index}].end_line: must be greater than or equal to line"
-            )
+            errors.append(f"index.symbols[{index}]: line exceeds end_line")
         owner = files_by_path.get(row["path"])
         if owner is None:
-            errors.append(f"symbols[{index}].path: owner file not found")
+            errors.append(f"index.symbols[{index}].path: not in files")
         elif owner["line_count"] is None:
-            errors.append(f"symbols[{index}].path: binary owner has no line count")
+            errors.append(
+                f"index.symbols[{index}].path: binary owner has no line count"
+            )
         else:
             if row["line"] > owner["line_count"]:
                 errors.append(
-                    f"symbols[{index}].line: exceeds owner line count {owner['line_count']}"
+                    f"index.symbols[{index}].line: exceeds file line_count"
                 )
             if row["end_line"] > owner["line_count"]:
                 errors.append(
-                    f"symbols[{index}].end_line: exceeds owner line count {owner['line_count']}"
+                    f"index.symbols[{index}].end_line: exceeds file line_count"
                 )
 
     for index, row in enumerate(configs):
         expected_id = f"{row['path']}:{row['key']}:{row['line']}"
         if row["id"] != expected_id:
-            errors.append(f"configs[{index}].id: expected {expected_id}")
+            errors.append(f"index.configs[{index}].id: expected {expected_id}")
         owner = files_by_path.get(row["path"])
         if owner is None:
-            errors.append(f"configs[{index}].path: owner file not found")
+            errors.append(f"index.configs[{index}].path: not in files")
         elif owner["line_count"] is None:
-            errors.append(f"configs[{index}].path: binary owner has no line count")
+            errors.append(
+                f"index.configs[{index}].path: binary owner has no line count"
+            )
         elif row["line"] > owner["line_count"]:
             errors.append(
-                f"configs[{index}].line: exceeds owner line count {owner['line_count']}"
+                f"index.configs[{index}].line: exceeds file line_count"
             )
 
     if data["content_digest"] != _materialized_digest(data):
-        errors.append("content_digest: does not match materialized content")
+        errors.append("index.content_digest: does not match materialized content")
     return errors

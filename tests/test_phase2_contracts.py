@@ -35,8 +35,28 @@ class SnapshotRegistryTests(unittest.TestCase):
             },
             set(registry),
         )
+        self.assertEqual(
+            {
+                "qwen3-tts-022e286b": "git-sparse-checkout",
+                "mindspeed-mm-0edd553e": "codeload-archive",
+                "mindspeed-llm-434baff7": "codeload-archive",
+                "moss-tts-ad99ec5f": "git-sparse-checkout",
+            },
+            {
+                snapshot_id: snapshot.acquisition_kind
+                for snapshot_id, snapshot in registry.items()
+            },
+        )
+        self.assertEqual(
+            3270,
+            sum(snapshot.materialized_file_count for snapshot in registry.values()),
+        )
         self.assertEqual("official-target", registry["qwen3-tts-022e286b"].role)
         self.assertEqual(35, registry["qwen3-tts-022e286b"].materialized_file_count)
+        self.assertEqual(
+            (".github/.DS_Store", "assets/Qwen3_TTS.pdf"),
+            registry["qwen3-tts-022e286b"].excluded_paths,
+        )
         self.assertEqual("main-reference", registry["mindspeed-mm-0edd553e"].role)
         self.assertEqual(1405, registry["mindspeed-mm-0edd553e"].materialized_file_count)
         self.assertEqual(1664, registry["mindspeed-llm-434baff7"].materialized_file_count)
@@ -84,15 +104,19 @@ class SnapshotRegistryTests(unittest.TestCase):
 
     def test_registry_rejects_unknown_incomplete_identity_and_bad_paths(self):
         unknown = copy.deepcopy(self.data)
-        unknown["snapshots"][0]["snapshot_id"] = "unapproved"
+        unknown["snapshots"][0]["snapshot_id"] = "unknown-snapshot"
         errors = validate_snapshot_registry(unknown)
-        self.assertIn("snapshots[0].snapshot_id: unapproved snapshot ID", errors)
-        self.assertTrue(any("expected approved IDs" in error for error in errors))
+        self.assertIn(
+            "snapshots[0].snapshot_id: unapproved unknown-snapshot", errors
+        )
+        self.assertTrue(
+            any(error.startswith("registry.snapshots: expected approved IDs") for error in errors)
+        )
 
         incomplete = copy.deepcopy(self.data)
         del incomplete["snapshots"][0]["project"]
         self.assertIn(
-            "snapshots[0]: missing required field project",
+            "snapshots[0]: missing field project",
             validate_snapshot_registry(incomplete),
         )
 
@@ -108,7 +132,14 @@ class SnapshotRegistryTests(unittest.TestCase):
         cases = [None, [], "registry", 1, True]
         for value in cases:
             with self.subTest(root=value):
-                self.assertEqual(["root: expected object"], validate_snapshot_registry(value))
+                self.assertEqual(["registry: expected object"], validate_snapshot_registry(value))
+
+        wrong_version = copy.deepcopy(self.data)
+        wrong_version["schema_version"] = 2
+        self.assertIn(
+            "registry.schema_version: expected 1",
+            validate_snapshot_registry(wrong_version),
+        )
 
         for row in (None, [], "snapshot", 7, True):
             with self.subTest(row=row):
@@ -119,7 +150,10 @@ class SnapshotRegistryTests(unittest.TestCase):
 
         malformed = copy.deepcopy(self.data)
         malformed["snapshots"] = None
-        self.assertIn("snapshots: expected array", validate_snapshot_registry(malformed))
+        self.assertIn(
+            "registry.snapshots: expected array",
+            validate_snapshot_registry(malformed),
+        )
 
     def test_loader_rejects_invalid_registry(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -235,12 +269,12 @@ class SourceIndexContractTests(unittest.TestCase):
 
     def test_recursive_schema_validation_is_total(self):
         cases = [
-            (lambda d: d.__setitem__("snapshot", []), "snapshot: expected object"),
-            (lambda d: d["snapshot"].__setitem__("extra", 1), "snapshot: unknown field extra"),
-            (lambda d: d["snapshot"].pop("project"), "snapshot: missing required field project"),
-            (lambda d: d.__setitem__("files", {}), "files: expected array"),
-            (lambda d: d.__setitem__("files", [None]), "files[0]: expected object"),
-            (lambda d: d["symbols"][0].__setitem__("line", "2"), "symbols[0].line: expected integer"),
+            (lambda d: d.__setitem__("snapshot", []), "index.snapshot: expected object"),
+            (lambda d: d["snapshot"].__setitem__("extra", 1), "index.snapshot: unknown field extra"),
+            (lambda d: d["snapshot"].pop("project"), "index.snapshot: missing field project"),
+            (lambda d: d.__setitem__("files", {}), "index.files: expected array"),
+            (lambda d: d.__setitem__("files", [None]), "index.files[0]: expected object"),
+            (lambda d: d["symbols"][0].__setitem__("line", "2"), "index.symbols[0].line: expected integer"),
         ]
         for mutate, expected in cases:
             with self.subTest(expected=expected):
@@ -248,13 +282,13 @@ class SourceIndexContractTests(unittest.TestCase):
 
     def test_schema_unknown_missing_type_enum_sha_and_minimum_errors(self):
         cases = [
-            (lambda d: d.__setitem__("extra", 1), "root: unknown field extra"),
-            (lambda d: d.pop("configs"), "root: missing required field configs"),
-            (lambda d: d.__setitem__("schema_version", "1"), "schema_version: expected integer"),
-            (lambda d: d["files"][0].__setitem__("kind", "source"), "files[0].kind: expected one of"),
-            (lambda d: d["files"][0].__setitem__("sha256", "ABC"), "files[0].sha256: does not match pattern"),
-            (lambda d: d["files"][0].__setitem__("bytes", -1), "files[0].bytes: expected minimum 0"),
-            (lambda d: d["symbols"][0].__setitem__("line", 0), "symbols[0].line: expected minimum 1"),
+            (lambda d: d.__setitem__("extra", 1), "index: unknown field extra"),
+            (lambda d: d.pop("configs"), "index: missing field configs"),
+            (lambda d: d.__setitem__("schema_version", "1"), "index.schema_version: expected integer"),
+            (lambda d: d["files"][0].__setitem__("kind", "source"), "index.files[0].kind: expected one of"),
+            (lambda d: d["files"][0].__setitem__("sha256", "ABC"), "index.files[0].sha256: does not match pattern"),
+            (lambda d: d["files"][0].__setitem__("bytes", -1), "index.files[0].bytes: expected minimum 0"),
+            (lambda d: d["symbols"][0].__setitem__("line", 0), "index.symbols[0].line: expected minimum 1"),
         ]
         for mutate, expected in cases:
             with self.subTest(expected=expected):
@@ -264,14 +298,14 @@ class SourceIndexContractTests(unittest.TestCase):
         errors = self.errors_after(
             lambda d: d["files"][0].__setitem__("line_count", None)
         )
-        self.assertIn("files[0].line_count: nonbinary files require an integer", errors)
+        self.assertIn("index.files[0].line_count: nonbinary files require an integer", errors)
 
         def binary_with_lines(data):
             data["files"][0]["kind"] = "binary"
             data["files"][0]["line_count"] = 8
 
         self.assertIn(
-            "files[0].line_count: binary files require null",
+            "index.files[0].line_count: binary files require null",
             self.errors_after(binary_with_lines),
         )
 
@@ -281,7 +315,14 @@ class SourceIndexContractTests(unittest.TestCase):
                 errors = self.errors_after(
                     lambda data, path=path: data["files"][0].__setitem__("path", path)
                 )
-                self.assertIn("files[0].path: absolute path is forbidden", errors)
+                self.assertIn("index.files[0].path: absolute path forbidden", errors)
+
+        errors = self.errors_after(
+            lambda data: data["configs"][0].__setitem__(
+                "owner", r"C:\Users\alice\project"
+            )
+        )
+        self.assertIn("index.configs[0].owner: absolute path forbidden", errors)
 
     def test_rejects_reversed_symbol_range_and_missing_or_binary_owner(self):
         def reverse(data):
@@ -290,22 +331,22 @@ class SourceIndexContractTests(unittest.TestCase):
             data["symbols"][0]["id"] = "pkg/module.py:Widget.run:6"
 
         self.assertIn(
-            "symbols[0].end_line: must be greater than or equal to line",
+            "index.symbols[0]: line exceeds end_line",
             self.errors_after(reverse),
         )
 
         missing = self.errors_after(
             lambda d: d["symbols"][0].__setitem__("path", "missing.py")
         )
-        self.assertIn("symbols[0].path: owner file not found", missing)
+        self.assertIn("index.symbols[0].path: not in files", missing)
 
         def binary_owner(data):
             data["files"][0]["kind"] = "binary"
             data["files"][0]["line_count"] = None
 
         binary_errors = self.errors_after(binary_owner)
-        self.assertIn("symbols[0].path: binary owner has no line count", binary_errors)
-        self.assertIn("configs[0].path: binary owner has no line count", binary_errors)
+        self.assertIn("index.symbols[0].path: binary owner has no line count", binary_errors)
+        self.assertIn("index.configs[0].path: binary owner has no line count", binary_errors)
 
     def test_sort_and_duplicate_rules(self):
         def unsorted_files(data):
@@ -313,12 +354,12 @@ class SourceIndexContractTests(unittest.TestCase):
             row["path"] = "a.py"
             data["files"].append(row)
 
-        self.assertIn("files: rows must be sorted by path", self.errors_after(unsorted_files))
+        self.assertIn("index.files: rows must be sorted by path", self.errors_after(unsorted_files))
 
         def duplicate_file(data):
             data["files"].append(copy.deepcopy(data["files"][0]))
 
-        self.assertIn("files: duplicate path pkg/module.py", self.errors_after(duplicate_file))
+        self.assertIn("index.files: duplicate path pkg/module.py", self.errors_after(duplicate_file))
 
         for key in ("symbols", "configs"):
             def duplicate_id(data, key=key):
@@ -327,7 +368,7 @@ class SourceIndexContractTests(unittest.TestCase):
             with self.subTest(key=key):
                 errors = self.errors_after(duplicate_id)
                 singular = "symbol" if key == "symbols" else "config"
-                self.assertTrue(any(error.startswith(f"{key}: duplicate id ") for error in errors))
+                self.assertTrue(any(error.startswith(f"index.{key}: duplicate id ") for error in errors))
                 self.assertNotIn(f"unused-{singular}", errors)
 
         def unsorted_symbols(data):
@@ -340,42 +381,42 @@ class SourceIndexContractTests(unittest.TestCase):
             row["end_line"] = 1
             data["symbols"].append(row)
 
-        self.assertIn("symbols: rows must be sorted by id", self.errors_after(unsorted_symbols))
+        self.assertIn("index.symbols: rows must be sorted by id", self.errors_after(unsorted_symbols))
 
     def test_identity_row_ids_and_owner_bounds(self):
         self.assertIn(
-            "snapshot.project: expected Example/Project",
+            "index.snapshot.project: expected Example/Project",
             self.errors_after(lambda d: d["snapshot"].__setitem__("project", "Other/Project")),
         )
         self.assertIn(
-            "snapshot.snapshot_id: unknown snapshot missing",
+            "index.snapshot.snapshot_id: unknown snapshot missing",
             self.errors_after(lambda d: d["snapshot"].__setitem__("snapshot_id", "missing")),
         )
         self.assertIn(
-            "symbols[0].id: expected pkg/module.py:Widget.run:2",
+            "index.symbols[0].id: expected pkg/module.py:Widget.run:2",
             self.errors_after(lambda d: d["symbols"][0].__setitem__("id", "wrong")),
         )
         self.assertIn(
-            "configs[0].id: expected pkg/module.py:batch_size:7",
+            "index.configs[0].id: expected pkg/module.py:batch_size:7",
             self.errors_after(lambda d: d["configs"][0].__setitem__("id", "wrong")),
         )
         self.assertIn(
-            "configs[0].line: exceeds owner line count 8",
+            "index.configs[0].line: exceeds file line_count",
             self.errors_after(lambda d: d["configs"][0].__setitem__("line", 9)),
         )
         self.assertIn(
-            "symbols[0].end_line: exceeds owner line count 8",
+            "index.symbols[0].end_line: exceeds file line_count",
             self.errors_after(lambda d: d["symbols"][0].__setitem__("end_line", 9)),
         )
         self.assertIn(
-            "symbols[0].line: exceeds owner line count 8",
+            "index.symbols[0].line: exceeds file line_count",
             self.errors_after(lambda d: d["symbols"][0].__setitem__("line", 9)),
         )
 
     def test_digest_and_recursive_forbidden_fields(self):
         data = self.valid_index()
         data["files"][0]["bytes"] += 1
-        self.assertIn("content_digest: does not match materialized content", validate_source_index(data, self.registry))
+        self.assertIn("index.content_digest: does not match materialized content", validate_source_index(data, self.registry))
 
         for forbidden in ("source_root", "body", "source", "text", "generated_at", "local_path"):
             with self.subTest(forbidden=forbidden):
@@ -384,10 +425,17 @@ class SourceIndexContractTests(unittest.TestCase):
                 )
                 self.assertTrue(any(f"forbidden field {forbidden}" in error for error in errors))
 
+        errors = self.errors_after(
+            lambda d: d.__setitem__(
+                "extra", {"nested": {"local_path": "relative/source"}}
+            )
+        )
+        self.assertIn("index.extra.nested: forbidden field local_path", errors)
+
     def test_malformed_root_never_raises(self):
         for value in (None, [], "index", 1, True):
             with self.subTest(value=value):
-                self.assertEqual(["root: expected object"], validate_source_index(value, self.registry))
+                self.assertEqual(["index: expected object"], validate_source_index(value, self.registry))
 
 
 if __name__ == "__main__":
