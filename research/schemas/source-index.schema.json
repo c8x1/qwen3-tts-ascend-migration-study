@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://c8x1.github.io/schemas/source-index-v1.json",
+  "title": "Qwen3-TTS Ascend source index v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "snapshot",
+    "indexer_version",
+    "files",
+    "symbols",
+    "configs",
+    "content_digest"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "snapshot_id",
+        "project",
+        "role",
+        "revision",
+        "acquisition_kind",
+        "content_id"
+      ],
+      "properties": {
+        "snapshot_id": {"type": "string"},
+        "project": {"type": "string"},
+        "role": {"type": "string"},
+        "revision": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "acquisition_kind": {
+          "type": "string",
+          "enum": ["git-sparse-checkout", "codeload-archive"]
+        },
+        "content_id": {"type": "string"}
+      }
+    },
+    "indexer_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "bytes", "sha256", "kind", "line_count"],
+        "properties": {
+          "path": {"type": "string"},
+          "bytes": {"type": "integer", "minimum": 0},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "kind": {
+            "type": "string",
+            "enum": ["python", "json", "toml", "yaml", "text", "binary"]
+          },
+          "line_count": {
+            "oneOf": [
+              {"type": "integer", "minimum": 0},
+              {"type": "null"}
+            ]
+          }
+        }
+      }
+    },
+    "symbols": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "qualname", "name", "kind", "line", "end_line"],
+        "properties": {
+          "id": {"type": "string"},
+          "path": {"type": "string"},
+          "qualname": {"type": "string"},
+          "name": {"type": "string"},
+          "kind": {
+            "type": "string",
+            "enum": ["class", "function", "async_function", "method", "async_method"]
+          },
+          "line": {"type": "integer", "minimum": 1},
+          "end_line": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "configs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "path", "key", "owner", "kind", "line"],
+        "properties": {
+          "id": {"type": "string"},
+          "path": {"type": "string"},
+          "key": {"type": "string"},
+          "owner": {"type": "string"},
+          "kind": {
+            "type": "string",
+            "enum": ["python-assignment", "json-key", "toml-key", "yaml-key"]
+          },
+          "line": {"type": "integer", "minimum": 1}
+        }
+      }
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

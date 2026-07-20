@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "snapshots": [
+    {
+      "snapshot_id": "qwen3-tts-022e286b",
+      "project": "QwenLM/Qwen3-TTS",
+      "role": "official-target",
+      "revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "acquisition_kind": "git-sparse-checkout",
+      "content_id": "git-tree:33e4644dc5a698874fa035630d1878aa453b564c",
+      "materialized_file_count": 35,
+      "source_url": "https://github.com/QwenLM/Qwen3-TTS",
+      "blob_url_template": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/{path}#L{start}-L{end}",
+      "excluded": {
+        "paths": [
+          ".github/.DS_Store",
+          "assets/Qwen3_TTS.pdf"
+        ],
+        "reason": "sparse source-only checkout excludes rendered paper and macOS metadata"
+      },
+      "gitlinks": []
+    },
+    {
+      "snapshot_id": "mindspeed-mm-0edd553e",
+      "project": "Ascend/MindSpeed-MM",
+      "role": "main-reference",
+      "revision": "0edd553e0ac9c912fe422c42cc9f42db9255ddcf",
+      "acquisition_kind": "codeload-archive",
+      "content_id": "archive-sha256:1b52f9a6a8e3536f02a7a06ed01cc4d00dafc57617783ca2a04d0250b670ba15",
+      "materialized_file_count": 1405,
+      "source_url": "https://gitcode.com/Ascend/MindSpeed-MM",
+      "blob_url_template": "https://github.com/Ascend/MindSpeed-MM/blob/0edd553e0ac9c912fe422c42cc9f42db9255ddcf/{path}#L{start}-L{end}",
+      "excluded": {
+        "paths": [],
+        "reason": "exact-SHA codeload tree; no Git metadata retained"
+      },
+      "gitlinks": []
+    },
+    {
+      "snapshot_id": "mindspeed-llm-434baff7",
+      "project": "Ascend/MindSpeed-LLM",
+      "role": "scale-satellite",
+      "revision": "434baff794bd5594ebc9ed8a5b399110da9a44f0",
+      "acquisition_kind": "codeload-archive",
+      "content_id": "git-tree:a00c5d3bc01d3357a9c943fef923571b5df676e2",
+      "materialized_file_count": 1664,
+      "source_url": "https://gitcode.com/Ascend/MindSpeed-LLM",
+      "blob_url_template": "https://github.com/Ascend/MindSpeed-LLM/blob/434baff794bd5594ebc9ed8a5b399110da9a44f0/{path}#L{start}-L{end}",
+      "excluded": {
+        "paths": [],
+        "reason": "tree-hash-verified exact-SHA codeload tree; no Git metadata retained"
+      },
+      "gitlinks": []
+    },
+    {
+      "snapshot_id": "moss-tts-ad99ec5f",
+      "project": "OpenMOSS/MOSS-TTS",
+      "role": "speech-codec-satellite",
+      "revision": "ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af",
+      "acquisition_kind": "git-sparse-checkout",
+      "content_id": "git-tree:a85bd2dd897f643413c4f3df2f32c3f59f6d8c37",
+      "materialized_file_count": 166,
+      "source_url": "https://github.com/OpenMOSS/MOSS-TTS",
+      "blob_url_template": "https://github.com/OpenMOSS/MOSS-TTS/blob/ad99ec5f26debf1d6c1a4dc8461b2bcb787ec9af/{path}#L{start}-L{end}",
+      "excluded": {
+        "paths": [
+          "assets/audio/reference_02_s1.wav",
+          "assets/audio/reference_02_s2.wav",
+          "assets/audio/reference_en.m4a",
+          "assets/audio/reference_en_0.mp3",
+          "assets/audio/reference_en_1.mp3",
+          "assets/audio/reference_en_2.mp3",
+          "assets/audio/reference_en_3.mp3",
+          "assets/audio/reference_zh.wav",
+          "assets/audio/reference_zh_0.wav",
+          "assets/audio/reference_zh_1.wav",
+          "assets/audio/reference_zh_2.wav",
+          "assets/audio/reference_zh_3.mp3",
+          "assets/text/moss_tts_example_texts.jsonl",
+          "assets/text/moss_voice_generator_example_texts.jsonl",
+          "moss_tts_realtime/audio/prompt_audio.mp3",
+          "moss_tts_realtime/audio/prompt_audio1.mp3",
+          "moss_tts_realtime/audio/user1.wav",
+          "moss_tts_realtime/audio/user2.wav"
+        ],
+        "reason": "source-only sparse checkout excludes committed wav/mp3/m4a/jsonl assets"
+      },
+      "gitlinks": [
+        {
+          "path": "moss_audio_tokenizer",
+          "revision": "56776e867cb38446fa4bc00d0aceccab5001b008",
+          "initialized": false
+        }
+      ]
+    }
+  ]
+}
