@@ -602,7 +602,7 @@
             {
               "type": "paragraph",
               "text": "状态层次必须分开：文档覆盖完成是本页目录状态；源码静态核验是 fixed tree 事实；项目声明是候选方自报材料；硬件待验证覆盖 import、算子、数值、分布式、checkpoint、inference 与质量。任何上一层都不能替代下一层。",
-              "state": "project_claim",
+              "state": "inference",
               "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
             },
             {"type": "source_refs", "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]}

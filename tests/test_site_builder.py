@@ -663,6 +663,30 @@ class SiteBuilderTest(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, coverage_json)
 
+    def test_coverage_research_methodology_is_inference_not_project_claim(self):
+        pages = {
+            page["slug"]: page for page in load_page_catalogs(FULL_TARGET_CATALOGS)
+        }
+        coverage = pages["target/coverage-gaps.html"]
+        environment_lanes = next(
+            section for section in coverage["sections"]
+            if section["id"] == "environment-lanes"
+        )
+        methodology = next(
+            block for block in environment_lanes["blocks"]
+            if block["type"] == "paragraph"
+            and block["text"].startswith("状态层次必须分开")
+        )
+        self.assertEqual(methodology["state"], "inference")
+
+    def test_site_builder_joins_newlines_outside_f_string_expressions(self):
+        source = (ROOT / "scripts/site_builder.py").read_text(encoding="utf-8")
+        self.assertNotIn(r"{'\n'.join(", source)
+        self.assertIn('rendered_rows = "\\n".join(rows)', source)
+        self.assertIn('rendered_sections = "\\n".join(sections)', source)
+        self.assertIn("{rendered_rows}</tbody>", source)
+        self.assertIn("{rendered_sections}", source)
+
     def test_coverage_catalog_rows_match_target_coverage_csv_exactly(self):
         pages = {
             page["slug"]: page for page in load_page_catalogs(FULL_TARGET_CATALOGS)

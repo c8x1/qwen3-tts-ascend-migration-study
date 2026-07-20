@@ -344,9 +344,10 @@ def _render_index_table(
                 f'<tr id="{_escape(anchor)}">{rendered_cells}'
                 f"<td>{fixed_link}</td></tr>"
             )
+    rendered_rows = "\n".join(rows)
     return (
         '<div class="table-scroll"><table class="index-table">'
-        f"<thead><tr>{head}</tr></thead><tbody>{'\n'.join(rows)}</tbody></table></div>"
+        f"<thead><tr>{head}</tr></thead><tbody>{rendered_rows}</tbody></table></div>"
     )
 
 
@@ -561,6 +562,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
             '  <script id="search-data" type="application/json">'
             f"{script_safe_json(search_documents)}</script>\n"
         )
+    rendered_sections = "\n".join(sections)
 
     rendered = f"""<!doctype html>
 <html lang="zh-CN">
@@ -601,7 +603,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
         <p class="lead">{_escape(page['summary'])}</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul>{objectives}</ul></div><div><h2>前置知识</h2><ul>{prerequisites}</ul></div></div>
         <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
-        {'\n'.join(sections)}
+        {rendered_sections}
         {page_nav}
       </article>
     </main>
