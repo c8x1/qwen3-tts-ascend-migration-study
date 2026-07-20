@@ -457,10 +457,13 @@ class SourceIndexContractTests(unittest.TestCase):
 
         for forbidden in ("source_root", "body", "source", "text", "generated_at", "local_path"):
             with self.subTest(forbidden=forbidden):
+                value = "print(1)" if forbidden == "body" else "secret"
                 errors = self.errors_after(
-                    lambda d, forbidden=forbidden: d["files"][0].__setitem__(forbidden, "secret")
+                    lambda d, forbidden=forbidden, value=value: d["files"][0].__setitem__(forbidden, value)
                 )
                 self.assertTrue(any(f"forbidden field {forbidden}" in error for error in errors))
+                if forbidden == "body":
+                    self.assertIn("index.files[0]: unknown field body", errors)
 
         errors = self.errors_after(
             lambda d: d.__setitem__(

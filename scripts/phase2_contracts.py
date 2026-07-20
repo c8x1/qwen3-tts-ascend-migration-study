@@ -363,8 +363,7 @@ def _validate_schema(value: object, schema: dict[str, Any], path: str, errors: l
                     errors.append(f"{path}: missing field {field}")
         if schema.get("additionalProperties") is False:
             for field in sorted(set(value) - set(properties)):
-                if field not in _FORBIDDEN_KEYS:
-                    errors.append(f"{path}: unknown field {field}")
+                errors.append(f"{path}: unknown field {field}")
         for field in sorted(set(value) & set(properties)):
             child_schema = properties[field]
             if isinstance(child_schema, dict):
