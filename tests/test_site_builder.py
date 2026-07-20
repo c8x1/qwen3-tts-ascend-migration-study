@@ -53,6 +53,16 @@ TARGET_PAGE_CONTRACTS = {
             ("装载模型", "qwen_tts/inference/qwen3_tts_model.py", "AutoModel.from_pretrained"),
             ("装载处理器", "qwen_tts/inference/qwen3_tts_model.py", "AutoProcessor.from_pretrained"),
         ],
+        "source_paths": {
+            "pyproject.toml",
+            "qwen_tts/core/__init__.py",
+            "LICENSE",
+            "MANIFEST.in",
+            "qwen_tts/__init__.py",
+            "qwen_tts/__main__.py",
+            "qwen_tts/cli/demo.py",
+            "qwen_tts/inference/qwen3_tts_model.py",
+        },
         "boundary": "package-boundary",
     },
     "target/model-architecture.html": {
@@ -68,11 +78,16 @@ TARGET_PAGE_CONTRACTS = {
             "model-boundary": set(),
         },
         "call_chain": [
-            ("提示词与说话人条件", "qwen_tts/core/models/modeling_qwen3_tts.py", "Qwen3TTSForConditionalGeneration"),
-            ("Talker codec-0", "qwen_tts/core/models/modeling_qwen3_tts.py", "Qwen3TTSTalkerForConditionalGeneration"),
-            ("MTP 残差码本", "qwen_tts/core/models/modeling_qwen3_tts.py", "forward_sub_talker_finetune"),
-            ("语音 tokenizer 与生成配置", "qwen_tts/core/models/modeling_qwen3_tts.py", "speech_tokenizer/* + generation_config.json"),
+            ("包装器装载入口", "qwen_tts/inference/qwen3_tts_model.py", "Qwen3TTSModel.from_pretrained"),
+            ("条件模型装载", "qwen_tts/core/models/modeling_qwen3_tts.py", "Qwen3TTSForConditionalGeneration.from_pretrained"),
+            ("speech tokenizer 资源", "qwen_tts/core/models/modeling_qwen3_tts.py", "speech_tokenizer/*"),
+            ("生成配置资源", "qwen_tts/core/models/modeling_qwen3_tts.py", "generation_config.json"),
         ],
+        "source_paths": {
+            "qwen_tts/core/models/configuration_qwen3_tts.py",
+            "qwen_tts/core/models/modeling_qwen3_tts.py",
+            "qwen_tts/inference/qwen3_tts_model.py",
+        },
         "boundary": "model-boundary",
     },
     "target/tokenizer-12hz.html": {
@@ -88,10 +103,14 @@ TARGET_PAGE_CONTRACTS = {
             "training-gap": set(),
         },
         "call_chain": [
-            ("编码入口", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "Qwen3TTSTokenizerV2Model.encode"),
-            ("残差量化", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "SplitResidualVectorQuantizer"),
-            ("解码入口", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "Qwen3TTSTokenizerV2Model.decode"),
+            ("12Hz encode 分支入口", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "Qwen3TTSTokenizerV2Model.encode"),
+            ("Mimi encoder 分支", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "self.encoder.encode"),
         ],
+        "source_paths": {
+            "qwen_tts/core/__init__.py",
+            "qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py",
+            "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+        },
         "boundary": "training-gap",
     },
     "target/tokenizer-25hz.html": {
@@ -110,11 +129,18 @@ TARGET_PAGE_CONTRACTS = {
             "asset-boundary": set(),
         },
         "call_chain": [
-            ("Tokenizer 入口", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Model"),
-            ("编码与量化", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Encoder"),
-            ("VQ 核心", "qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "DistributedGroupResidualVectorQuantization"),
-            ("解码与波形", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Decoder"),
+            ("25Hz encode 分支入口", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Model.encode"),
+            ("编码器量化分支", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Encoder.quantize_speech"),
+            ("波形转 mel 分支", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Encoder.speech2mel"),
+            ("mel 转 code 分支", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "Qwen3TTSTokenizerV1Encoder.mel2code"),
         ],
+        "source_paths": {
+            "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+            "qwen_tts/core/tokenizer_25hz/vq/speech_vq.py",
+            "qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py",
+            "qwen_tts/core/tokenizer_25hz/vq/core_vq.py",
+            "qwen_tts/core/models/modeling_qwen3_tts.py",
+        },
         "boundary": "asset-boundary",
     },
     "target/processor-contracts.html": {
@@ -128,11 +154,15 @@ TARGET_PAGE_CONTRACTS = {
             "migration-boundary": set(),
         },
         "call_chain": [
-            ("输入归一化", "qwen_tts/inference/qwen3_tts_tokenizer.py", "Qwen3TTSTokenizer._normalize_audio_inputs"),
-            ("文本与 ChatML", "qwen_tts/core/models/processing_qwen3_tts.py", "Qwen3TTSProcessor"),
-            ("音频编码", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "Qwen3TTSTokenizerV2Model.encode"),
-            ("提示词分支", "qwen_tts/inference/qwen3_tts_model.py", "x-vector-only / ICL text+audio"),
+            ("ChatML 文本分支", "qwen_tts/core/models/processing_qwen3_tts.py", "Qwen3TTSProcessor.apply_chat_template"),
+            ("文本 tokenizer 分支", "qwen_tts/core/models/processing_qwen3_tts.py", "Qwen3TTSProcessor.__call__"),
+            ("文本 BatchFeature", "qwen_tts/core/models/processing_qwen3_tts.py", "BatchFeature"),
         ],
+        "source_paths": {
+            "qwen_tts/core/models/processing_qwen3_tts.py",
+            "qwen_tts/inference/qwen3_tts_tokenizer.py",
+            "qwen_tts/inference/qwen3_tts_model.py",
+        },
         "boundary": "migration-boundary",
     },
 }
@@ -595,6 +625,20 @@ class SiteBuilderTest(unittest.TestCase):
                     and block["rows"]
                 ]
                 self.assertTrue(source_tables)
+                source_path_index = next(
+                    table["headers"].index("源码路径")
+                    for table in source_tables
+                )
+                actual_source_paths = {
+                    row[source_path_index]
+                    for table in source_tables
+                    for row in table["rows"]
+                }
+                self.assertTrue(
+                    contract["source_paths"] <= actual_source_paths,
+                    f"{page['slug']}: missing source paths "
+                    f"{contract['source_paths'] - actual_source_paths}",
+                )
                 self.assertTrue(sections[contract["boundary"]]["blocks"])
 
         serialized = json.dumps(targets, ensure_ascii=False)
@@ -616,12 +660,200 @@ class SiteBuilderTest(unittest.TestCase):
         self.assertIn("sdist", serialized)
         self.assertIn("不等于源码仓中不存在 examples/finetuning", serialized)
         self.assertIn("codec-0", serialized)
-        self.assertIn("15 个残差码本组", serialized)
+        self.assertIn("num_code_groups - 1", serialized)
+        self.assertIn("类默认值为 32", serialized)
+        self.assertIn("实际发布 checkpoint 配置 pending", serialized)
+        self.assertNotIn("15 个残差码本组", serialized)
         self.assertIn("(T,16)", serialized)
         self.assertIn("x-vector-only", serialized)
         self.assertIn("ICL text+audio", serialized)
         self.assertNotRegex(serialized, r"CANN 8\.5\.2.*(?:兼容|支持|跑通)")
         self.assertNotRegex(serialized, r"(?:Ascend|昇腾).*(?:兼容|支持|跑通)")
+
+    def test_architecture_call_flows_follow_fixed_source_branches(self):
+        pages = {
+            page["slug"]: page for page in load_page_catalogs(TARGET_CATALOGS)
+        }
+
+        def section(slug, section_id):
+            return next(
+                item
+                for item in pages[slug]["sections"]
+                if item["id"] == section_id
+            )
+
+        def chains(slug, section_id):
+            return [
+                block
+                for block in section(slug, section_id)["blocks"]
+                if block["type"] == "call_chain"
+            ]
+
+        def symbols(chain):
+            return [item["symbol"] for item in chain["items"]]
+
+        package = "target/package-inference-api.html"
+        self.assertTrue(chains(package, "base-api"))
+        self.assertEqual(
+            symbols(chains(package, "base-api")[0]),
+            [
+                "Qwen3TTSModel.create_voice_clone_prompt",
+                "Qwen3TTSModel.generate_voice_clone",
+                "Qwen3TTSForConditionalGeneration.generate",
+                "Qwen3TTSTokenizer.decode",
+            ],
+        )
+        self.assertEqual(
+            symbols(chains(package, "voice-design-api")[0]),
+            [
+                "Qwen3TTSModel.generate_voice_design",
+                "Qwen3TTSForConditionalGeneration.generate",
+                "Qwen3TTSTokenizer.decode",
+            ],
+        )
+        self.assertEqual(
+            symbols(chains(package, "custom-api")[0]),
+            [
+                "Qwen3TTSModel.generate_custom_voice",
+                "Qwen3TTSForConditionalGeneration.generate",
+                "Qwen3TTSTokenizer.decode",
+            ],
+        )
+
+        model = "target/model-architecture.html"
+        model_chains = chains(model, "generation-flow")
+        self.assertEqual(len(model_chains), 2)
+        self.assertEqual(
+            symbols(model_chains[1]),
+            [
+                "Qwen3TTSModel.generate_voice_clone / generate_voice_design / generate_custom_voice",
+                "Qwen3TTSForConditionalGeneration.generate",
+                "self.talker.generate / Qwen3TTSTalkerForConditionalGeneration.forward",
+                "self.code_predictor.generate",
+                "Qwen3TTSTokenizer.decode / self.model.speech_tokenizer.decode",
+            ],
+        )
+        inference_json = json.dumps(model_chains[1], ensure_ascii=False)
+        self.assertNotIn("forward_sub_talker_finetune", inference_json)
+        self.assertIn(
+            "forward_sub_talker_finetune",
+            json.dumps(section(model, "code-predictor"), ensure_ascii=False),
+        )
+        self.assertIn(
+            "forward_finetune",
+            json.dumps(section(model, "code-predictor"), ensure_ascii=False),
+        )
+        speaker_json = json.dumps(
+            section(model, "speaker-encoder"), ensure_ascii=False
+        )
+        self.assertIn("TGT-CONFIG-001", speaker_json)
+
+        tokenizer_12 = "target/tokenizer-12hz.html"
+        self.assertTrue(chains(tokenizer_12, "decode-contract"))
+        encode_12 = chains(tokenizer_12, "encode-contract")[0]
+        self.assertEqual(
+            symbols(encode_12),
+            ["Qwen3TTSTokenizerV2Model.encode", "self.encoder.encode"],
+        )
+        self.assertNotIn(
+            "SplitResidualVectorQuantizer",
+            json.dumps(encode_12, ensure_ascii=False),
+        )
+        self.assertEqual(
+            symbols(chains(tokenizer_12, "decode-contract")[0]),
+            [
+                "Qwen3TTSTokenizerV2Model.decode",
+                "Qwen3TTSTokenizerV2Decoder.chunked_decode",
+                "Qwen3TTSTokenizerV2Decoder.forward",
+                "SplitResidualVectorQuantizer.decode",
+            ],
+        )
+
+        tokenizer_25 = "target/tokenizer-25hz.html"
+        self.assertTrue(chains(tokenizer_25, "vq-core"))
+        self.assertTrue(chains(tokenizer_25, "dit-bigvgan"))
+        self.assertEqual(
+            symbols(chains(tokenizer_25, "encoder-vq")[0]),
+            [
+                "Qwen3TTSTokenizerV1Model.encode",
+                "Qwen3TTSTokenizerV1Encoder.quantize_speech",
+                "Qwen3TTSTokenizerV1Encoder.speech2mel",
+                "Qwen3TTSTokenizerV1Encoder.mel2code",
+            ],
+        )
+        self.assertEqual(
+            [symbols(chain) for chain in chains(tokenizer_25, "vq-core")],
+            [
+                ["DistributedGroupResidualVectorQuantization.encode"],
+                ["DistributedGroupResidualVectorQuantization.decode"],
+            ],
+        )
+        self.assertEqual(
+            symbols(chains(tokenizer_25, "dit-bigvgan")[0]),
+            [
+                "Qwen3TTSTokenizerV1Model.decode",
+                "Qwen3TTSTokenizerV1Decoder.forward",
+                "Qwen3TTSTokenizerV1DecoderDiTModel.sample",
+                "Qwen3TTSTokenizerV1DecoderBigVGANModel.forward",
+            ],
+        )
+
+        processor = "target/processor-contracts.html"
+        self.assertTrue(chains(processor, "text-contract"))
+        self.assertTrue(chains(processor, "prompt-contract"))
+        text_flow = chains(processor, "text-contract")[0]
+        audio_flows = chains(processor, "audio-wrapper")
+        prompt_flow = chains(processor, "prompt-contract")[0]
+        self.assertEqual(
+            symbols(text_flow),
+            [
+                "Qwen3TTSProcessor.apply_chat_template",
+                "Qwen3TTSProcessor.__call__",
+                "BatchFeature",
+            ],
+        )
+        self.assertEqual(len(audio_flows), 2)
+        self.assertEqual(
+            symbols(audio_flows[0]),
+            [
+                "Qwen3TTSTokenizer.encode",
+                "Qwen3TTSTokenizer._normalize_audio_inputs",
+                "self.feature_extractor",
+                "self.model.encode (V1/V2 dispatch)",
+            ],
+        )
+        self.assertEqual(
+            symbols(audio_flows[1]),
+            [
+                "Qwen3TTSTokenizer.decode",
+                "model_type branch",
+                "self.model.decode (V1/V2 dispatch)",
+                "self.model.get_output_sample_rate",
+            ],
+        )
+        self.assertNotIn(
+            "Qwen3TTSProcessor",
+            json.dumps(audio_flows, ensure_ascii=False),
+        )
+        self.assertEqual(
+            symbols(prompt_flow),
+            [
+                "Qwen3TTSModel.create_voice_clone_prompt",
+                "x_vector_only_mode / icl_mode",
+                "Qwen3TTSModel.generate_voice_clone",
+            ],
+        )
+        prompt_json = json.dumps(
+            section(processor, "prompt-contract"), ensure_ascii=False
+        )
+        self.assertIn("TGT-API-002", prompt_json)
+        shape = next(
+            block
+            for block in section(processor, "shape-contract")["blocks"]
+            if block["type"] == "paragraph"
+        )
+        self.assertEqual(shape["state"], "inference")
+        self.assertIn("TGT-TOK12-002", shape["evidence_ids"])
 
     def test_generated_architecture_site_preserves_navigation_search_and_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -680,15 +912,51 @@ class SiteBuilderTest(unittest.TestCase):
                 parser.feed(html)
                 self.assertEqual(len(parser.ids), len(set(parser.ids)))
                 for href in parser.links:
-                    if href.startswith(("http://", "https://", "mailto:", "#")):
+                    if href.startswith("#"):
+                        self.assertIn(
+                            href[1:],
+                            parser.ids,
+                            f"{path.relative_to(output)} -> {href}",
+                        )
                         continue
-                    target_text = href.split("#", 1)[0].split("?", 1)[0]
+                    if href.startswith(("http://", "https://", "mailto:")):
+                        continue
+                    target_text, _, fragment = href.partition("#")
+                    target_text = target_text.split("?", 1)[0]
                     if target_text.endswith(".html"):
                         target = (path.parent / target_text).resolve()
                         self.assertTrue(
                             target.is_file(),
                             f"{path.relative_to(output)} -> {href}",
                         )
+                        if fragment:
+                            target_parser = LinkParser()
+                            target_parser.feed(
+                                target.read_text(encoding="utf-8")
+                            )
+                            self.assertIn(
+                                fragment,
+                                target_parser.ids,
+                                f"{path.relative_to(output)} -> {href}",
+                            )
+
+            cross_page_fragments = [
+                document["href"]
+                for document in external
+                if "#" in document["href"]
+                and document["href"].split("#", 1)[0].endswith(".html")
+            ]
+            self.assertTrue(cross_page_fragments)
+            fragment_cache = {}
+            for href in cross_page_fragments:
+                target_text, fragment = href.split("#", 1)
+                if target_text not in fragment_cache:
+                    target_parser = LinkParser()
+                    target_parser.feed(
+                        (output / target_text).read_text(encoding="utf-8")
+                    )
+                    fragment_cache[target_text] = set(target_parser.ids)
+                self.assertIn(fragment, fragment_cache[target_text])
 
             for slug in TARGET_PAGE_CONTRACTS:
                 html = (output / slug).read_text(encoding="utf-8")
