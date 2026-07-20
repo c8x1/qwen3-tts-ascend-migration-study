@@ -41,7 +41,9 @@
                 ["根包导入", "qwen_tts/__init__.py", "L17–L24"],
                 ["模块入口", "qwen_tts/__main__.py", "L16–L24"],
                 ["CLI 默认值与传参", "qwen_tts/cli/demo.py", "L91–L108, L605–L613"],
-                ["公开推理包装器", "qwen_tts/inference/qwen3_tts_model.py", "L83–L839"]
+                ["公开推理包装器", "qwen_tts/inference/qwen3_tts_model.py", "L83–L839"],
+                ["条件生成模型", "qwen_tts/core/models/modeling_qwen3_tts.py", "L2022–L2292"],
+                ["speech tokenizer 包装器", "qwen_tts/inference/qwen3_tts_tokenizer.py", "L44–L410"]
               ]
             },
             {
@@ -421,11 +423,11 @@
             },
             {
               "type": "paragraph",
-              "text": "decode 接收批量 (B,T,16) audio_codes，经转置进入 causal/chunked decoder，再按有效代码长度与 upsample rate 截取逐样本波形。这里是静态 shape 契约，不是音质或时延结论。",
-              "state": "verified",
-              "evidence_ids": ["TGT-TOK12-001"]
+              "text": "decode 接收批量 audio_codes；结合模型的 (B,T,num_quantizers) 输入契约与配置默认 16 个有效 quantizers，(B,T,16) 是默认组合下的 shape 推断。代码经转置进入 causal/chunked decoder，再按有效长度与 upsample rate 截取逐样本波形；这不是音质或时延结论。",
+              "state": "inference",
+              "evidence_ids": ["TGT-TOK12-001", "TGT-TOK12-002"]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-001"]}
+            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-001", "TGT-TOK12-002"]}
           ]
         },
         {

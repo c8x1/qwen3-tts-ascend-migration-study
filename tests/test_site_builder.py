@@ -61,7 +61,9 @@ TARGET_PAGE_CONTRACTS = {
             "qwen_tts/__init__.py",
             "qwen_tts/__main__.py",
             "qwen_tts/cli/demo.py",
+            "qwen_tts/core/models/modeling_qwen3_tts.py",
             "qwen_tts/inference/qwen3_tts_model.py",
+            "qwen_tts/inference/qwen3_tts_tokenizer.py",
         },
         "boundary": "package-boundary",
     },
@@ -767,6 +769,16 @@ class SiteBuilderTest(unittest.TestCase):
                 "Qwen3TTSTokenizerV2Decoder.forward",
                 "SplitResidualVectorQuantizer.decode",
             ],
+        )
+        decode_shape = next(
+            block
+            for block in section(tokenizer_12, "decode-contract")["blocks"]
+            if block["type"] == "paragraph" and "(B,T,16)" in block["text"]
+        )
+        self.assertEqual(decode_shape["state"], "inference")
+        self.assertEqual(
+            decode_shape["evidence_ids"],
+            ["TGT-TOK12-001", "TGT-TOK12-002"],
         )
 
         tokenizer_25 = "target/tokenizer-25hz.html"
