@@ -1,7 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test } from '@playwright/test';
 
-const SOURCE_COMMIT = 'b8d8b936f9793aa211baf88b6f501ccbc4aed02b';
+const SOURCE_COMMIT = '022e286b98fbec7e1e916cb940cdf532cd9f488e';
 
 async function expectWcagAA(page) {
   const results = await new AxeBuilder({ page })
@@ -59,7 +59,7 @@ test('collapsed rails paint every named keyboard destination and tooltip inside 
   await page.locator('#toggle-left').click();
   await page.locator('#toggle-right').click();
 
-  for (const name of ['首页', '章节', '源码索引', '迁移映射', '目录', '证据', '警示', '引用']) {
+  for (const name of ['首页', '章节', '目录']) {
     const link = page.getByRole('link', { name, exact: true });
     await expect(link).toBeVisible();
     for (const interaction of ['hover', 'focus']) {
@@ -78,7 +78,7 @@ test('mobile header preserves the chapter title and opens a real search input', 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/site/');
 
-  await expect(page.locator('.mobile-chapter-title')).toContainText('HCCL 并行初始化');
+  await expect(page.locator('.mobile-chapter-title')).toContainText('Qwen3-TTS 官方目标源码学习路径');
   const searchButton = page.getByRole('button', { name: '打开站内搜索' });
   await searchButton.focus();
   await page.keyboard.press('Enter');
@@ -94,21 +94,16 @@ test('source block copies text and links to an immutable official source range',
   const source = page.locator('.source-link');
   await expect(source).toHaveAttribute(
     'href',
-    `https://github.com/Ascend/MindSpeed/blob/${SOURCE_COMMIT}/mindspeed/core/parallel_state.py#L424-L445`,
+    `https://github.com/QwenLM/Qwen3-TTS/blob/${SOURCE_COMMIT}/qwen_tts/inference/qwen3_tts_model.py#L83-L92`,
   );
   await page.locator('.copy-source').click();
   await expect(page.locator('.copy-status')).toHaveText('已复制');
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('initialize_ndmm_parallel_group');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('def from_pretrained');
 
   await expect(page.getByRole('navigation', { name: '相邻章节' })).toBeVisible();
-  await expect(page.getByRole('contentinfo')).toContainText('固定 commit');
-  const previous = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link').first();
-  const next = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link').last();
-  const previousHref = await previous.getAttribute('href');
-  const nextHref = await next.getAttribute('href');
-  expect(previousHref).toMatch(/\.html$/);
-  expect(nextHref).toMatch(/\.html$/);
-  expect(previousHref).not.toBe(nextHref);
+  await expect(page.getByRole('contentinfo')).toContainText('源码引用固定版本');
+  const next = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link');
+  await expect(next).toHaveAttribute('href', 'target/package-inference-api.html');
 });
 
 test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
@@ -122,22 +117,13 @@ test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
   await expect(page.locator('pre')).toBeVisible();
 });
 
-test('deep chapter tree exposes reusable disclosure state and current path', async ({ page }) => {
+test('chapter tree exposes the complete ordered path and current page', async ({ page }) => {
   await page.goto('/site/');
-  const currentBranch = page.getByRole('button', { name: '分布式初始化' });
-  const otherBranch = page.getByRole('button', { name: '训练工程' });
-  await expect(currentBranch).toHaveAttribute('aria-expanded', 'true');
-  await expect(currentBranch).toHaveAttribute('aria-controls', 'tree-distributed');
-  await expect(page.locator('#tree-distributed')).toBeVisible();
-  await expect(page.locator('[aria-current="page"]')).toContainText('HCCL');
-
-  await expect(otherBranch).toHaveAttribute('aria-expanded', 'false');
-  await otherBranch.focus();
-  await page.keyboard.press('Enter');
-  await expect(otherBranch).toHaveAttribute('aria-expanded', 'true');
-  await expect(page.locator('#tree-training')).toBeVisible();
-  await currentBranch.click();
-  await expect(page.locator('#tree-distributed')).toBeHidden();
+  const links = page.locator('#chapter-tree a[data-page-link]');
+  await expect(links).toHaveCount(13);
+  await expect(links.first()).toHaveAttribute('aria-current', 'page');
+  await expect(links.first()).toContainText('Qwen3-TTS');
+  await expect(links.last()).toContainText('全站搜索');
 });
 
 test('without JavaScript the full flow and fallbacks remain readable while enhancements disappear', async ({ browser }) => {
@@ -147,18 +133,17 @@ test('without JavaScript the full flow and fallbacks remain readable while enhan
 
   await expect(page.locator('.sidebar-toggle')).toHaveCount(2);
   await expect(page.locator('.sidebar-toggle').first()).toBeHidden();
-  await expect(page.locator('.tree-toggle').first()).toBeHidden();
   await expect(page.locator('.copy-source')).toBeHidden();
   await expect(page.locator('.search-enhancement')).toBeHidden();
   await expect(page.getByRole('searchbox', { name: '站内搜索' })).toBeVisible();
   await expect(page.getByRole('link', { name: '无脚本模式：浏览章节索引' })).toHaveAttribute('href', '#chapter-tree');
-  await expect(page.locator('#tree-distributed')).toBeVisible();
+  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(13);
   await expect(page.getByRole('navigation', { name: '章节导航' })).toBeVisible();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('complementary', { name: '证据与页内目录' })).toBeVisible();
-  await page.getByRole('searchbox', { name: '站内搜索' }).fill('HCCL');
+  await page.getByRole('searchbox', { name: '站内搜索' }).fill('RMSNorm');
   await page.getByRole('searchbox', { name: '站内搜索' }).press('Enter');
-  await expect(page).toHaveURL(/\/site\/\?q=HCCL$/);
+  await expect(page).toHaveURL(/\/site\/search\.html\?q=RMSNorm$/);
   await context.close();
 });
 
@@ -183,27 +168,18 @@ test('long content, deeper chapter tree, empty evidence, and absent TOC form an 
   await page.evaluate(() => {
     document.querySelector('.breadcrumb').textContent = Array(8).fill('超长目录名').join(' / ');
     document.querySelector('h1').textContent = '多机多卡深层目录与极长章节标题'.repeat(4);
-    const tree = document.querySelector('#tree-training');
-    tree.hidden = false;
+    const tree = document.querySelector('#chapter-tree');
     tree.insertAdjacentHTML('beforeend', '<li><ul class="tree-branch"><li><ul class="tree-branch"><li><a href="#source">第六层源码定位路径</a></li></ul></li></ul></li>');
     document.querySelectorAll('#page-toc a').forEach((link) => link.remove());
-    document.querySelector('#evidence-status p').textContent = '';
   });
   await expect(page.getByRole('link', { name: '第六层源码定位路径' })).toBeVisible();
   await expect(page.locator('#page-toc')).toBeHidden();
-  await expect(page.locator('#evidence-status')).toBeHidden();
   await expect(page.getByRole('link', { name: '目录', exact: true })).toBeHidden();
-  await expect(page.getByRole('link', { name: '证据', exact: true })).toBeHidden();
-  await expect(page.locator('#migration-warning')).toBeVisible();
-  await expect(page.locator('#citations')).toBeVisible();
+  await expect(page.locator('.evidence-card').first()).toBeVisible();
+  await expect(page.locator('.citation-link[data-fixed-source-link]').first()).toBeVisible();
   await expect(page.locator('#toggle-right')).toBeVisible();
   await page.locator('#toggle-right').click();
-  for (const name of ['警示', '引用']) {
-    const link = page.getByRole('link', { name, exact: true });
-    await expect(link).toBeVisible();
-    await link.focus();
-    await expect(link).toBeFocused();
-  }
+  await expect(page.locator('html')).toHaveAttribute('data-right-sidebar', 'collapsed');
   await expect(page.locator('#article-content')).toBeVisible();
   await expect(page.locator('#evidence-rail')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -237,8 +213,7 @@ test('200% reflow fixture paints a deep drawer tree without document overflow or
   await page.evaluate(() => {
     document.querySelector('.breadcrumb').textContent = Array(8).fill('超长目录名').join(' / ');
     document.querySelector('h1').textContent = '多机多卡深层目录与极长章节标题'.repeat(4);
-    const tree = document.querySelector('#tree-training');
-    tree.hidden = false;
+    const tree = document.querySelector('#chapter-tree');
     tree.insertAdjacentHTML('beforeend', '<li><ul class="tree-branch"><li><ul class="tree-branch"><li><a href="#source">200% 下的第六层路径</a></li></ul></li></ul></li>');
   });
   const deepLink = page.getByRole('link', { name: '200% 下的第六层路径' });
@@ -253,9 +228,13 @@ test('print keeps citation URLs and immutable source URLs visible without a page
   await page.locator('.toc-card').evaluate((node) => node.remove());
   await page.emulateMedia({ media: 'print' });
 
-  await expect(page.locator('.source-link')).toBeVisible();
-  await expect(page.locator('.source-link')).toHaveCSS('--print-url', /github\.com\/Ascend\/MindSpeed/);
-  await expect(page.locator('.citation-link')).toBeVisible();
-  await expect(page.locator('.citation-link')).toHaveCSS('--print-url', /github\.com\/Ascend\/MindSpeed/);
+  const source = page.locator('.source-link');
+  await expect(source).toBeVisible();
+  await expect.poll(() => source.evaluate((node) => getComputedStyle(node, '::after').content))
+    .toContain('github.com/QwenLM/Qwen3-TTS');
+  const citation = page.locator('.citation-link[data-fixed-source-link]').first();
+  await expect(citation).toBeVisible();
+  await expect.poll(() => citation.evaluate((node) => getComputedStyle(node, '::after').content))
+    .toContain('github.com/QwenLM/Qwen3-TTS');
   await expect(page.locator('#evidence-rail')).toBeVisible();
 });

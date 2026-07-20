@@ -249,6 +249,31 @@ def _fixed_index_url(snapshot, row: dict[str, object], dataset: str) -> str:
     )
 
 
+def _fixed_link_attributes(
+    snapshot_id: str,
+    source_path: str,
+    *,
+    start_line: int | None = None,
+    end_line: int | None = None,
+    file_only: bool = False,
+) -> str:
+    attributes = [
+        'data-fixed-source-link="true"',
+        f'data-snapshot-id="{_escape(snapshot_id)}"',
+        f'data-source-path="{_escape(source_path)}"',
+    ]
+    if file_only:
+        attributes.append('data-file-only="true"')
+    else:
+        attributes.extend(
+            (
+                f'data-start-line="{start_line}"',
+                f'data-end-line="{end_line}"',
+            )
+        )
+    return " ".join(attributes)
+
+
 def _render_table(block: dict[str, object], section_id: str) -> str:
     headers = block["headers"]
     rows = block["rows"]
@@ -272,7 +297,8 @@ def _render_table(block: dict[str, object], section_id: str) -> str:
         rendered_rows.append(f"<tr{attributes}>{cells}</tr>")
     body = ("\n" if tag_coverage_paths else "").join(rendered_rows)
     return (
-        '<div class="table-scroll"><table class="contract-table">'
+        '<div class="table-scroll" tabindex="0" role="region" '
+        'aria-label="可横向滚动的数据表"><table class="contract-table">'
         f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
     )
 
@@ -308,10 +334,38 @@ def _render_index_table(
         for row in index[dataset]:
             identity = row["path"] if dataset == "files" else row["id"]
             anchor = _anchor(dataset, snapshot_id, identity)
-            url = _fixed_index_url(registry[snapshot_id], row, dataset)
-            fixed_link = (
-                f'<a class="print-url" href="{_escape(url)}">固定版本 ↗</a>'
+            empty_text = (
+                dataset == "files"
+                and row["kind"] != "binary"
+                and row["line_count"] == 0
             )
+            if empty_text:
+                fixed_link = '<span class="file-empty">空文件（无行号）</span>'
+            elif dataset == "files":
+                file_only = row["kind"] == "binary"
+                start_line = None if file_only else 1
+                end_line = None if file_only else row["line_count"]
+            elif dataset == "symbols":
+                file_only = False
+                start_line = row["line"]
+                end_line = row["end_line"]
+            else:
+                file_only = False
+                start_line = row["line"]
+                end_line = row["line"]
+            if not empty_text:
+                url = _fixed_index_url(registry[snapshot_id], row, dataset)
+                link_attributes = _fixed_link_attributes(
+                    snapshot_id,
+                    row["path"],
+                    start_line=start_line,
+                    end_line=end_line,
+                    file_only=file_only,
+                )
+                fixed_link = (
+                    f'<a class="print-url" {link_attributes} '
+                    f'href="{_escape(url)}">固定版本 ↗</a>'
+                )
             if dataset == "files":
                 cells = (
                     snapshot_id,
@@ -346,7 +400,8 @@ def _render_index_table(
             )
     rendered_rows = "\n".join(rows)
     return (
-        '<div class="table-scroll"><table class="index-table">'
+        '<div class="table-scroll" tabindex="0" role="region" '
+        'aria-label="可横向滚动的数据表"><table class="index-table">'
         f"<thead><tr>{head}</tr></thead><tbody>{rendered_rows}</tbody></table></div>"
     )
 
@@ -414,15 +469,22 @@ def _render_evidence_card(
             if row.start_line is None
             else f"L{row.start_line}–L{row.end_line}"
         )
+        link_attributes = _fixed_link_attributes(
+            row.snapshot_id,
+            row.path,
+            start_line=row.start_line,
+            end_line=row.end_line,
+            file_only=row.start_line is None,
+        )
         parts.append(
-            f'<a data-rail-content class="citation-link print-url" href="{_escape(source_url)}">'
+            f'<a data-rail-content class="citation-link print-url" '
+            f'{link_attributes} href="{_escape(source_url)}">'
             f"固定源码 {_escape(row.path)} · {_escape(line_text)} ↗</a>"
         )
-    ledger_href = relative_href(page_slug, "../research/source-ledger.csv")
     for source_id in row.source_ids:
         parts.append(
-            f'<a data-rail-content class="citation-link print-url" href="{_escape(ledger_href)}">'
-            f"来源台账 {_escape(source_id)}</a>"
+            f'<span data-rail-content class="citation-label">'
+            f"来源台账 {_escape(source_id)}</span>"
         )
     for decision_ref in row.decision_refs:
         parts.append(
@@ -476,7 +538,8 @@ def render_page(page, navigation, evidence, search_documents) -> str:
         current = item["slug"] == page_slug
         attrs = ' class="active" aria-current="page"' if current else ""
         nav_items.append(
-            f'<li><a{attrs} href="{_escape(relative_href(page_slug, item["slug"]))}">'
+            f'<li><a data-page-link{attrs} '
+            f'href="{_escape(relative_href(page_slug, item["slug"]))}">'
             f"{_escape(item['order'])} · {_escape(item['title'])}</a></li>"
         )
 
@@ -493,6 +556,40 @@ def render_page(page, navigation, evidence, search_documents) -> str:
     )
 
     registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+    source_example = ""
+    if page_slug == "index.html":
+        snapshot_id = "qwen3-tts-022e286b"
+        source_path = "qwen_tts/inference/qwen3_tts_model.py"
+        start_line, end_line = 83, 92
+        source_url = registry[snapshot_id].blob_url_template.format(
+            path=source_path, start=start_line, end=end_line
+        )
+        link_attributes = _fixed_link_attributes(
+            snapshot_id,
+            source_path,
+            start_line=start_line,
+            end_line=end_line,
+        )
+        excerpt = (
+            "def from_pretrained(\n"
+            "    cls,\n"
+            "    pretrained_model_name_or_path: str,\n"
+            "    **kwargs,\n"
+            ") -> Qwen3TTSModel:"
+        )
+        source_example = (
+            '<div class="source-example" id="source">'
+            '<div class="code-header"><span>官方装载入口（短摘录）</span>'
+            '<div class="code-actions">'
+            f'<a class="source-link print-url" {link_attributes} '
+            f'href="{_escape(source_url)}">固定源码 L83–L92 ↗</a>'
+            '<button class="copy-source" type="button" '
+            'data-copy-target="qwen-load-example">复制</button>'
+            '<span class="copy-status" role="status" aria-live="polite"></span>'
+            '</div></div>'
+            f'<pre id="qwen-load-example"><code>{_escape(excerpt)}</code></pre>'
+            '</div>'
+        )
     indexes = None
     if any(
         block["type"] == "index_table"
@@ -592,7 +689,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
       <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
     </div>
     <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
-      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="rail-icons" role="group" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
       <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree">{''.join(nav_items)}</ul></div>
       <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
     </nav>
@@ -603,12 +700,13 @@ def render_page(page, navigation, evidence, search_documents) -> str:
         <p class="lead">{_escape(page['summary'])}</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul>{objectives}</ul></div><div><h2>前置知识</h2><ul>{prerequisites}</ul></div></div>
         <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+{source_example}
         {rendered_sections}
         {page_nav}
       </article>
     </main>
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
-      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="rail-icons" role="group" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
       <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2>{toc}</section>{evidence_cards}</div>
       <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
     </aside>

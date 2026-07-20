@@ -10,11 +10,16 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scripts.phase2_contracts import (
+    PHASE2_CATALOG_PATHS,
     load_evidence,
     load_snapshot_registry,
+    validate_fixed_links,
+    validate_generated_site,
+    validate_public_tracking,
     validate_source_index,
     validate_target_coverage,
 )
+from scripts.site_builder import load_page_catalogs
 
 
 def _expected_snapshot(snapshot) -> dict[str, object]:
@@ -111,13 +116,16 @@ def main() -> int:
     args = parser.parse_args()
     errors = validate_indexes()
     if errors:
-        print("\n".join(errors))
+        print("\n".join(errors), file=sys.stderr)
         return 1
     if args.indexes_only:
         print("validated 4 source indexes: 3270 files; no absolute paths or source bodies")
         return 0
 
     evidence = None
+    registry = load_snapshot_registry(
+        ROOT / "research/source-snapshots.json"
+    )
     evidence_path = ROOT / "research/target-evidence.json"
     try:
         evidence = load_evidence(evidence_path)
@@ -143,14 +151,30 @@ def main() -> int:
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
         errors.append(str(error))
 
+    pages: list[dict[str, object]] = []
+    if evidence is not None:
+        try:
+            pages = load_page_catalogs(list(PHASE2_CATALOG_PATHS))
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as error:
+            errors.append(str(error))
+
+    if evidence is not None and pages:
+        errors.extend(
+            validate_generated_site(
+                ROOT / "site", pages, evidence, coverage_rows
+            )
+        )
+        errors.extend(validate_fixed_links(ROOT / "site", registry))
+    errors.extend(validate_public_tracking(ROOT))
+
     if errors:
-        print("\n".join(errors))
+        print("\n".join(errors), file=sys.stderr)
         return 1
     evidence_count = len(evidence)
     print(
-        "validated Phase 2 data: 4 indexes, "
-        f"{evidence_count} evidence records, {len(coverage_rows)} target "
-        "coverage rows, 0 omissions"
+        "validated Phase 2: 4 indexes / 3270 files, "
+        f"{evidence_count} evidence records, {len(coverage_rows)} coverage "
+        f"rows, {len(pages)} pages, 0 broken links, 0 omissions"
     )
     return 0
 

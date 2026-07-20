@@ -419,11 +419,14 @@ class LinkParser(HTMLParser):
         super().__init__()
         self.links = []
         self.ids = []
+        self.anchors = []
 
     def handle_starttag(self, tag, attrs):
         values = dict(attrs)
         if values.get("id"):
             self.ids.append(values["id"])
+        if tag == "a":
+            self.anchors.append(values)
         attribute = "href" if tag in {"a", "link"} else "src" if tag == "script" else None
         if attribute and values.get(attribute):
             self.links.append(values[attribute])
@@ -905,6 +908,99 @@ class SiteBuilderTest(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertRegex(html, r"</tr>\n<tr id=\"entry-[0-9a-f]{16}\">")
+
+    def test_fixed_source_links_mark_text_evidence_and_binary_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, FULL_TARGET_CATALOGS)
+
+            files = LinkParser()
+            files.feed(
+                (output / "indexes/source-files.html").read_text(
+                    encoding="utf-8"
+                )
+            )
+            text = next(
+                anchor
+                for anchor in files.anchors
+                if anchor.get("data-snapshot-id") == "qwen3-tts-022e286b"
+                and anchor.get("data-source-path") == "pyproject.toml"
+            )
+            self.assertEqual(text["data-fixed-source-link"], "true")
+            self.assertEqual(text["data-start-line"], "1")
+            self.assertEqual(text["data-end-line"], "46")
+            self.assertNotIn("data-file-only", text)
+
+            binary = next(
+                anchor
+                for anchor in files.anchors
+                if anchor.get("data-source-path")
+                == "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz"
+            )
+            self.assertEqual(binary["data-file-only"], "true")
+            self.assertNotIn("data-start-line", binary)
+            self.assertNotIn("data-end-line", binary)
+            self.assertNotIn("#", binary["href"])
+
+            evidence = LinkParser()
+            evidence.feed((output / "index.html").read_text(encoding="utf-8"))
+            source = next(
+                anchor
+                for anchor in evidence.anchors
+                if anchor.get("data-source-path")
+                == "qwen_tts/inference/qwen3_tts_model.py"
+                and anchor.get("data-start-line") == "83"
+                and anchor.get("data-end-line") == "121"
+            )
+            self.assertEqual(source["data-fixed-source-link"], "true")
+            self.assertEqual(source["data-end-line"], "121")
+
+    def test_empty_text_index_row_does_not_forge_a_line_range(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, [ROOT / "content/site-foundation.json"])
+            html = (output / "indexes/source-files.html").read_text(
+                encoding="utf-8"
+            )
+            row = next(
+                line
+                for line in html.splitlines()
+                if "mindspeed_llm/core/models/common/language_module/__init__.py"
+                in line
+            )
+            self.assertIn("空文件（无行号）", row)
+            self.assertNotIn("/blob/", row)
+            self.assertNotIn("data-fixed-source-link", row)
+
+    def test_homepage_has_short_copyable_qwen_teaching_excerpt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, FULL_TARGET_CATALOGS)
+            html = (output / "index.html").read_text(encoding="utf-8")
+            self.assertIn('class="source-link print-url"', html)
+            self.assertIn('data-copy-target="qwen-load-example"', html)
+            self.assertIn('id="qwen-load-example"', html)
+            self.assertIn("def from_pretrained(", html)
+            self.assertIn('data-source-path="qwen_tts/inference/qwen3_tts_model.py"', html)
+            self.assertIn('data-start-line="83" data-end-line="92"', html)
+            self.assertNotIn("Load a Qwen3 TTS model and its processor", html)
+
+    def test_generated_table_scroll_regions_are_keyboard_focusable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, FULL_TARGET_CATALOGS)
+            for relative in (
+                "index.html",
+                "target/coverage-gaps.html",
+                "indexes/source-files.html",
+            ):
+                html = (output / relative).read_text(encoding="utf-8")
+                self.assertNotIn('<div class="table-scroll">', html)
+                self.assertIn(
+                    '<div class="table-scroll" tabindex="0" role="region" '
+                    'aria-label="可横向滚动的数据表">',
+                    html,
+                )
 
     def test_cli_default_catalogs_load_only_approved_existing_files(self):
         with tempfile.TemporaryDirectory() as tmp:

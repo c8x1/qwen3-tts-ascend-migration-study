@@ -26,8 +26,8 @@
       <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
     </div>
     <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
-      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
-      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a class="active" aria-current="page" href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a href="sft-training-loop.html">8 · SFT 训练循环</a></li><li><a href="optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a href="coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <div class="rail-icons" role="group" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a data-page-link href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a data-page-link href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a data-page-link class="active" aria-current="page" href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a data-page-link href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a data-page-link href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a data-page-link href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a data-page-link href="sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a data-page-link href="sft-training-loop.html">8 · SFT 训练循环</a></li><li><a data-page-link href="optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a data-page-link href="coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a data-page-link href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a data-page-link href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a data-page-link href="../search.html">13 · 全站搜索</a></li></ul></div>
       <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
     </nav>
     <main id="article-content">
@@ -37,7 +37,8 @@
         <p class="lead">拆开复合配置、说话人编码器、Talker、残差码本预测器与目标源码中的 FP32 精度岛。</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul><li>解释复合配置如何嵌套 speaker、Talker 与 code predictor</li><li>区分 Talker 的 codec-0 输出与由 num_code_groups 决定的残差码本预测</li><li>定位 RoPE、RMSNorm 与 eager attention 的 FP32 计算边界</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与自回归生成</li></ul></div></div>
         <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
-        <section id="composite-config"><h2>复合配置树</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3-TTS 配置把 speaker encoder、code predictor、Talker 与顶层条件生成配置嵌套在一起；配置树是后续源码导航的结构入口。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">组件</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>复合配置</td><td>qwen_tts/core/models/configuration_qwen3_tts.py</td><td>L22–L499</td></tr><tr><td>Speaker/Talker/条件生成</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L311–L2292</td></tr><tr><td>speech tokenizer 资源装载</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L1891–L1936</td></tr><tr><td>公开包装器装载与生成</td><td>qwen_tts/inference/qwen3_tts_model.py</td><td>L83–L839</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-CONFIG-001">证据 TGT-CONFIG-001</a></li></ul></section>
+
+        <section id="composite-config"><h2>复合配置树</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3-TTS 配置把 speaker encoder、code predictor、Talker 与顶层条件生成配置嵌套在一起；配置树是后续源码导航的结构入口。</p><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表"><table class="contract-table"><thead><tr><th scope="col">组件</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>复合配置</td><td>qwen_tts/core/models/configuration_qwen3_tts.py</td><td>L22–L499</td></tr><tr><td>Speaker/Talker/条件生成</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L311–L2292</td></tr><tr><td>speech tokenizer 资源装载</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L1891–L1936</td></tr><tr><td>公开包装器装载与生成</td><td>qwen_tts/inference/qwen3_tts_model.py</td><td>L83–L839</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-CONFIG-001">证据 TGT-CONFIG-001</a></li></ul></section>
 <section id="speaker-encoder"><h2>Speaker encoder：mel 到 embedding</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSSpeakerEncoder 是 ECAPA 风格说话人编码器。配置类的 extraction contract 默认 sample_rate=24000、mel_dim=128，模型 forward 产出 speaker embedding；这里组合的是配置与静态张量契约，不声称音频已在本机执行。</p><ul class="source-refs"><li><a href="#evidence-TGT-MODEL-001">证据 TGT-MODEL-001</a></li><li><a href="#evidence-TGT-CONFIG-001">证据 TGT-CONFIG-001</a></li></ul></section>
 <section id="talker"><h2>Talker：text+codec 到 codec-0</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> Qwen3TTSTalkerForConditionalGeneration 把文本与已有 codec 条件送入 decoder，并由 LM head 预测 codec-0 logits。codec-0 是 Talker 的主序列输出，不能与后续残差码本组混为一谈。</p><ul class="source-refs"><li><a href="#evidence-TGT-MODEL-002">证据 TGT-MODEL-002</a></li></ul></section>
 <section id="code-predictor"><h2>MTP：由配置决定的残差码本</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 训练 helper forward_sub_talker_finetune 读取 Talker hidden state 与 codec_ids，构造子 Talker 输入后调用 code_predictor.forward_finetune，并返回 logits 与 residual-codebook loss；它不属于 runtime inference chain。</p><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 静态公式是 residual groups = num_code_groups - 1；配置类默认值为 32，但实际发布 checkpoint 配置 pending，当前固定 evidence 没有锁定其真实 num_code_groups，因此不把默认值换算成发布模型结论。</p><ul class="source-refs"><li><a href="#evidence-TGT-MODEL-004">证据 TGT-MODEL-004</a></li><li><a href="#evidence-TGT-MODEL-002">证据 TGT-MODEL-002</a></li></ul></section>
@@ -48,80 +49,80 @@
       </article>
     </main>
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
-      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="rail-icons" role="group" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
       <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#composite-config">复合配置树</a><a data-rail-content href="#speaker-encoder">Speaker encoder：mel 到 embedding</a><a data-rail-content href="#talker">Talker：text+codec 到 codec-0</a><a data-rail-content href="#code-predictor">MTP：由配置决定的残差码本</a><a data-rail-content href="#precision-islands">目标源码的 FP32 精度岛</a><a data-rail-content href="#generation-flow">装载期资源与运行期推理</a><a data-rail-content href="#model-boundary">状态与模型边界</a></section><section id="evidence-TGT-CONFIG-001" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-CONFIG-001</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>speaker, code predictor, Talker and composite config nesting</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/configuration_qwen3_tts.py#L22-L499">固定源码 qwen_tts/core/models/configuration_qwen3_tts.py · L22–L499 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/configuration_qwen3_tts.py" data-start-line="22" data-end-line="499" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/configuration_qwen3_tts.py#L22-L499">固定源码 qwen_tts/core/models/configuration_qwen3_tts.py · L22–L499 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-001" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-001</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>ECAPA-style speaker encoder produces the speaker embedding</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L311-L393">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L311–L393 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="311" data-end-line="393" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L311-L393">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L311–L393 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-002" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-002</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>Talker backbone, codec-0 LM head and residual code predictor integration</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1427-L1810">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1427–L1810 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1427" data-end-line="1810" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1427-L1810">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1427–L1810 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-004" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-004</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>`forward_sub_talker_finetune` returns residual-codebook loss</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1612-L1633">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1612–L1633 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1612" data-end-line="1633" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1612-L1633">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1612–L1633 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-005" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-005</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>Talker RoPE math disables autocast and computes in FP32 before restoring input dtype</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L526-L559">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L526–L559 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="526" data-end-line="559" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L526-L559">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L526–L559 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-006" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-006</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>RMSNorm variance is computed in FP32</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L595-L610">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L595–L610 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="595" data-end-line="610" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L595-L610">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L595–L610 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-007" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-007</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>eager attention softmax uses FP32 then casts to query dtype</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L634-L657">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L634–L657 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="634" data-end-line="657" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L634-L657">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L634–L657 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-API-001" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-API-001</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>`from_pretrained` registers AutoConfig/AutoModel/AutoProcessor then loads model and processor</p>
 <p data-rail-content>摘录：AutoModel.from_pretrained</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L83-L121">固定源码 qwen_tts/inference/qwen3_tts_model.py · L83–L121 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/inference/qwen3_tts_model.py" data-start-line="83" data-end-line="121" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L83-L121">固定源码 qwen_tts/inference/qwen3_tts_model.py · L83–L121 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-TOK25-011" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-TOK25-011</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>main model loads `speech_tokenizer/*`, tokenizer config and `generation_config.json`</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1891-L1936">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1891–L1936 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1891" data-end-line="1936" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1891-L1936">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1891–L1936 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-API-002" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-API-002</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>Base voice clone prompt and generation API</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L356-L633">固定源码 qwen_tts/inference/qwen3_tts_model.py · L356–L633 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/inference/qwen3_tts_model.py" data-start-line="356" data-end-line="633" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L356-L633">固定源码 qwen_tts/inference/qwen3_tts_model.py · L356–L633 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-API-003" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-API-003</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>VoiceDesign and CustomVoice public wrapper APIs</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L637-L839">固定源码 qwen_tts/inference/qwen3_tts_model.py · L637–L839 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/inference/qwen3_tts_model.py" data-start-line="637" data-end-line="839" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L637-L839">固定源码 qwen_tts/inference/qwen3_tts_model.py · L637–L839 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-TGT-MODEL-003" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-MODEL-003</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>composite conditional generation and prompt/speaker injection flow</p>
-<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1813-L2292">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1813–L2292 ↗</a>
-<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1813" data-end-line="2292" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1813-L2292">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1813–L2292 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section></div>
       <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
     </aside>

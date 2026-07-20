@@ -533,14 +533,14 @@
                 ["qwen_tts/core/models/configuration_qwen3_tts.py", "mapped", "target/model-architecture.html", "composite-config", "TGT-CONFIG-001", ""],
                 ["qwen_tts/core/models/modeling_qwen3_tts.py", "mapped", "target/model-architecture.html", "talker", "TGT-MODEL-002", ""],
                 ["qwen_tts/core/models/processing_qwen3_tts.py", "mapped", "target/processor-contracts.html", "text-contract", "TGT-PROC-001", ""],
-                ["qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py", "mapped", "target/tokenizer-12hz.html", "configuration", "TGT-TOK12-002|TGT-TOK12-003", ""],
+                ["qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py", "mapped", "target/tokenizer-12hz.html", "rate-derivation", "TGT-TOK12-003", ""],
                 ["qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "mapped", "target/tokenizer-12hz.html", "encode-contract", "TGT-TOK12-001", ""],
                 ["qwen_tts/core/tokenizer_25hz/configuration_qwen3_tts_tokenizer_v1.py", "pending", "target/tokenizer-25hz.html", "asset-inventory", "TGT-TOK25-002", "25Hz public checkpoint and executable path remain unknown"],
                 ["qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "pending", "target/tokenizer-25hz.html", "dit-bigvgan", "TGT-TOK25-001", "Static dependencies and encode/decode wiring are verified but runtime assets and execution are unverified"],
-                ["qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz", "pending", "target/tokenizer-25hz.html", "bundled-filter", "TGT-TOK25-014", "Fixed binary URL and metadata only; binary body is never copied and execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz", "pending", "target/tokenizer-25hz.html", "asset-inventory", "TGT-TOK25-014", "Fixed binary URL and metadata only; binary body is never copied and execution remains unverified"],
                 ["qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "pending", "target/tokenizer-25hz.html", "vq-core", "TGT-TOK25-009|TGT-TOK25-010", "Direct VQ source is mapped; execution remains unverified"],
-                ["qwen_tts/core/tokenizer_25hz/vq/speech_vq.py", "pending", "target/tokenizer-25hz.html", "speech-vq", "TGT-TOK25-004|TGT-TOK25-005", "Direct ONNX/SoX/Kaldi dependencies are mapped; execution remains unverified"],
-                ["qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py", "pending", "target/tokenizer-25hz.html", "whisper-encoder", "TGT-TOK25-006|TGT-TOK25-007", "Direct flash-attn dtype/manual fallback is mapped; execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/speech_vq.py", "pending", "target/tokenizer-25hz.html", "speech-vq-dependencies", "TGT-TOK25-004|TGT-TOK25-005", "Direct ONNX/SoX/Kaldi dependencies are mapped; execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py", "pending", "target/tokenizer-25hz.html", "whisper-attention", "TGT-TOK25-006|TGT-TOK25-007", "Direct flash-attn dtype/manual fallback is mapped; execution remains unverified"],
                 ["qwen_tts/inference/qwen3_tts_model.py", "mapped", "target/package-inference-api.html", "load-chain", "TGT-API-001", ""],
                 ["qwen_tts/inference/qwen3_tts_tokenizer.py", "mapped", "target/processor-contracts.html", "audio-wrapper", "TGT-PROC-002", ""]
               ]
@@ -642,7 +642,7 @@
               "type": "table",
               "headers": ["deferred", "本页边界"],
               "rows": [
-                ["full reference walkthroughs", "后续分别讲 MindSpeed-MM、MindSpeed-LLM 与 MOSS-TTS，不在本页合并成单一实现"],
+                ["MindSpeed-MM 完整走读", "后续再分别讲 MindSpeed-LLM 与 MOSS-TTS；三者不在本页合并成单一实现"],
                 ["migration mapping", "后续以核验矩阵描述 CUDA→NPU 变化；本页不是迁移方案"],
                 ["NPU execution", "后续按 target lane 真机运行；本页不执行硬件验证"]
               ]

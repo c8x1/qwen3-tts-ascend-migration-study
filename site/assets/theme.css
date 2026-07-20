@@ -70,7 +70,7 @@ pre { margin: 0; padding: 1rem; overflow-x: auto; border-radius: 0 0 .55rem .55r
 .tree-toggle:hover { background: rgb(147 71 53 / 9%); }
 .rail-card { margin-bottom: .75rem; padding: .85rem; border: 1px solid #cfbfa9; border-radius: .55rem; background: #faf6ef; }
 .rail-card h2 { font-size: .9rem; }
-.rail-card p, .rail-card a { display: block; margin: .2rem 0; color: #665747; font-size: .75rem; line-height: 1.6; }
+.rail-card p, .rail-card a, .rail-card .citation-label { display: block; margin: .2rem 0; color: #665747; font-size: .75rem; line-height: 1.6; }
 .sidebar-toggle, .drawer-close { border: 1px solid #bba88f; border-radius: .4rem; color: #6d5948; background: #f9f4ec; cursor: pointer; }
 .sidebar-toggle { position: absolute; top: .75rem; width: 1.8rem; height: 1.8rem; }
 .left-toggle { right: .65rem; } .right-toggle { left: .65rem; }

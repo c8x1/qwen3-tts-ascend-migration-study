@@ -5,12 +5,18 @@ from __future__ import annotations
 import collections
 import csv
 import hashlib
+import os
 import json
 import re
+import subprocess
+import tempfile
+import urllib.parse
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache, lru_cache
+from html.parser import HTMLParser
 from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 
@@ -70,6 +76,11 @@ COVERAGE_FIELDS = (
     "section",
     "evidence_ids",
     "reason",
+)
+PHASE2_CATALOG_PATHS = (
+    ROOT / "content/site-foundation.json",
+    ROOT / "content/target-architecture.json",
+    ROOT / "content/target-training.json",
 )
 
 
@@ -885,4 +896,520 @@ def validate_target_coverage(
                 errors.append(
                     f"{prefix}: missing section {page}#{section}"
                 )
+    return errors
+
+
+@dataclass(frozen=True)
+class HtmlLink:
+    url: str
+    fragment: str
+
+
+@dataclass(frozen=True)
+class HtmlAnchor:
+    attributes: dict[str, str]
+
+
+class ParsedHtml:
+    def __init__(self) -> None:
+        self.ids: set[str] = set()
+        self.headings: list[int] = []
+        self.local_links: list[HtmlLink] = []
+        self.anchors: list[HtmlAnchor] = []
+        self.aria_controls: list[str] = []
+        self.remote_resources: list[str] = []
+        self.remote_anchors: list[str] = []
+        self.evidence_states: list[str] = []
+
+
+class _DocumentParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.document = ParsedHtml()
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        attributes = {key: (value or "") for key, value in attrs}
+        if attributes.get("id"):
+            self.document.ids.add(attributes["id"])
+        if re.fullmatch(r"h[1-6]", tag):
+            self.document.headings.append(int(tag[1]))
+        if attributes.get("aria-controls"):
+            self.document.aria_controls.extend(
+                attributes["aria-controls"].split()
+            )
+        if "data-evidence-state" in attributes:
+            self.document.evidence_states.append(
+                attributes["data-evidence-state"]
+            )
+
+        if tag == "a":
+            self.document.anchors.append(HtmlAnchor(attributes))
+            self._collect_link(attributes.get("href", ""), runtime=False)
+        elif tag == "form":
+            self._collect_link(attributes.get("action", ""), runtime=True)
+        elif tag in {"script", "img", "audio", "video", "source"}:
+            self._collect_link(attributes.get("src", ""), runtime=True)
+        elif tag == "link" and attributes.get("href"):
+            rel = set(attributes.get("rel", "").casefold().split())
+            if rel & {"stylesheet", "preload", "modulepreload", "icon"}:
+                self._collect_link(attributes["href"], runtime=True)
+
+        for key in ("data-search-url", "data-search-index", "data-search-data"):
+            if attributes.get(key):
+                self._collect_link(attributes[key], runtime=True)
+
+    def _collect_link(self, url: str, *, runtime: bool) -> None:
+        if not url:
+            return
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme or parsed.netloc:
+            if runtime:
+                self.document.remote_resources.append(url)
+            elif parsed.scheme != "https":
+                self.document.remote_anchors.append(url)
+            return
+        self.document.local_links.append(
+            HtmlLink(url=url, fragment=urllib.parse.unquote(parsed.fragment))
+        )
+
+
+def parse_html(path: Path) -> ParsedHtml:
+    parser = _DocumentParser()
+    parser.feed(path.read_text(encoding="utf-8"))
+    parser.close()
+    return parser.document
+
+
+def expected_generated_outputs(pages) -> set[str]:
+    return {page["slug"] for page in pages} | {"assets/search-index.json"}
+
+
+def actual_generated_outputs(site_root: Path) -> set[str]:
+    html = {
+        path.relative_to(site_root).as_posix()
+        for path in site_root.rglob("*.html")
+    }
+    search = site_root / "assets/search-index.json"
+    return html | ({"assets/search-index.json"} if search.is_file() else set())
+
+
+def _block_evidence_ids(block):
+    yield from block.get("evidence_ids", [])
+    for item in block.get("items", []):
+        yield from item.get("evidence_ids", [])
+
+
+def validate_cross_contracts(pages, evidence, coverage) -> list[str]:
+    errors: list[str] = []
+    known_evidence = set(evidence)
+    catalog = {
+        page["slug"]: {
+            section["id"]: section for section in page["sections"]
+        }
+        for page in pages
+    }
+    section_evidence: dict[tuple[str, str], set[str]] = {}
+    page_evidence: set[str] = set()
+
+    for page in pages:
+        for section in page["sections"]:
+            refs = {
+                evidence_id
+                for block in section["blocks"]
+                for evidence_id in _block_evidence_ids(block)
+            }
+            section_evidence[(page["slug"], section["id"])] = refs
+            page_evidence.update(refs)
+            for evidence_id in sorted(refs - known_evidence):
+                errors.append(
+                    f"page {page['slug']}#{section['id']}: unknown evidence "
+                    f"{evidence_id}"
+                )
+
+    from scripts.site_builder import load_all_indexes
+
+    target = load_all_indexes()["qwen3-tts-022e286b"]
+    target_paths = collections.Counter(row["path"] for row in target["files"])
+    coverage_paths = collections.Counter(row["path"] for row in coverage)
+    for path in sorted((target_paths - coverage_paths).elements()):
+        errors.append(f"target coverage: missing {path}")
+    for path in sorted((coverage_paths - target_paths).elements()):
+        errors.append(f"target coverage: unexpected {path}")
+
+    for row in coverage:
+        if row["disposition"] not in {"mapped", "pending"}:
+            continue
+        destination = (row["page"], row["section"])
+        if (
+            row["page"] not in catalog
+            or row["section"] not in catalog[row["page"]]
+        ):
+            errors.append(
+                f"coverage {row['path']}: missing section "
+                f"{row['page']}#{row['section']}"
+            )
+            continue
+        for evidence_id in filter(None, row["evidence_ids"].split("|")):
+            if evidence_id not in known_evidence:
+                errors.append(
+                    f"coverage {row['path']}: unknown evidence {evidence_id}"
+                )
+            elif evidence_id not in section_evidence[destination]:
+                errors.append(
+                    f"coverage {row['path']}: evidence {evidence_id} absent from "
+                    f"{row['page']}#{row['section']}"
+                )
+
+    important = {
+        "TGT-SCOPE-002",
+        "TGT-TOK25-002",
+        "PH1-ROLE-MM",
+        "PH1-ROLE-LLM",
+        "PH1-ROLE-MOSS",
+        "PH1-ENV-LANES",
+    }
+    for evidence_id in sorted(important - page_evidence):
+        errors.append(
+            f"important evidence {evidence_id}: not referenced by any page"
+        )
+    return errors
+
+
+def _resolve_local_target(site_root: Path, page_path: Path, href: str):
+    parsed = urllib.parse.urlsplit(href)
+    raw_path = urllib.parse.unquote(parsed.path)
+    candidate = (
+        page_path.resolve()
+        if not raw_path
+        else (page_path.parent / raw_path).resolve()
+    )
+    resolved_site = site_root.resolve()
+    allowed = {(site_root.parent / ref).resolve() for ref in DECISION_REFS}
+    relative = page_path.relative_to(site_root).as_posix()
+    if not candidate.is_relative_to(resolved_site):
+        if candidate not in allowed:
+            return None, f"{relative}: local link escapes site {href}"
+        if not candidate.is_file():
+            return None, f"{relative}: broken local link {href}"
+    elif not candidate.is_file():
+        return None, f"{relative}: broken local link {href}"
+    return candidate, None
+
+
+def validate_document_structure(
+    relative: str, parsed: ParsedHtml, evidence
+) -> list[str]:
+    errors: list[str] = []
+    h1_count = parsed.headings.count(1)
+    if h1_count != 1:
+        errors.append(f"{relative}: expected one h1, found {h1_count}")
+    previous = 0
+    for level in parsed.headings:
+        if previous and level > previous + 1:
+            errors.append(
+                f"{relative}: heading level jumps h{previous} to h{level}"
+            )
+        previous = level
+    for state in parsed.evidence_states:
+        if state not in EVIDENCE_STATES:
+            errors.append(f"{relative}: invalid evidence status {state}")
+    return errors
+
+
+def validate_aria_references(
+    source_path: Path, parsed: ParsedHtml, site_root: Path | None = None
+) -> list[str]:
+    root = site_root or source_path.parent
+    relative = source_path.relative_to(root).as_posix()
+    return [
+        f"{relative}: aria-controls {control} has no matching id"
+        for control in parsed.aria_controls
+        if control not in parsed.ids
+    ]
+
+
+def validate_remote_resources(
+    source_path: Path, parsed: ParsedHtml, site_root: Path | None = None
+) -> list[str]:
+    root = site_root or source_path.parent
+    relative = source_path.relative_to(root).as_posix()
+    errors = [
+        f"{relative}: remote runtime resource {url}"
+        for url in parsed.remote_resources
+    ]
+    errors.extend(
+        f"{relative}: external anchor must use https {url}"
+        for url in parsed.remote_anchors
+    )
+    return errors
+
+
+def validate_generated_site(
+    site_root,
+    pages,
+    evidence,
+    coverage,
+    catalog_paths=PHASE2_CATALOG_PATHS,
+) -> list[str]:
+    # Normalize once so macOS' /var -> /private/var alias cannot make
+    # otherwise identical paths fail relative_to checks.
+    site_root = Path(site_root).resolve()
+    errors = validate_cross_contracts(pages, evidence, coverage)
+    expected = expected_generated_outputs(pages)
+    actual = actual_generated_outputs(site_root)
+    for relative in sorted(expected - actual):
+        errors.append(f"site: missing generated output {relative}")
+    for relative in sorted(actual - expected):
+        errors.append(f"site: unexpected generated output {relative}")
+
+    parsed_pages: dict[Path, ParsedHtml] = {}
+    for relative in sorted(expected & actual):
+        if not relative.endswith(".html"):
+            continue
+        path = site_root / relative
+        parsed = parse_html(path)
+        parsed_pages[path.resolve()] = parsed
+        errors.extend(validate_document_structure(relative, parsed, evidence))
+
+    for source_path, parsed in parsed_pages.items():
+        for link in parsed.local_links:
+            target, error = _resolve_local_target(
+                site_root, source_path, link.url
+            )
+            if error:
+                errors.append(error)
+                continue
+            if link.fragment and target.suffix == ".html":
+                target_doc = parsed_pages.get(target) or parse_html(target)
+                if link.fragment not in target_doc.ids:
+                    errors.append(
+                        f"{source_path.relative_to(site_root).as_posix()}: "
+                        f"broken fragment {link.url}"
+                    )
+        errors.extend(
+            validate_aria_references(source_path, parsed, site_root)
+        )
+        errors.extend(
+            validate_remote_resources(source_path, parsed, site_root)
+        )
+
+    with tempfile.TemporaryDirectory() as tmp:
+        from scripts.site_builder import build_site
+
+        fresh_root = Path(tmp) / "site"
+        build_site(fresh_root, list(catalog_paths))
+        for relative in sorted(expected):
+            current = site_root / relative
+            fresh = fresh_root / relative
+            if (
+                current.is_file()
+                and fresh.is_file()
+                and current.read_bytes() != fresh.read_bytes()
+            ):
+                errors.append(f"site: generated output differs {relative}")
+    return errors
+
+
+def _expected_fixed_url(
+    snapshot, source_path, start=None, end=None, file_only=False
+):
+    if file_only:
+        return snapshot.blob_url_template.split("#L", 1)[0].format(
+            path=source_path
+        )
+    return snapshot.blob_url_template.format(
+        path=source_path, start=start, end=end
+    )
+
+
+def validate_fixed_links(site_root: Path, registry) -> list[str]:
+    from scripts.site_builder import load_all_indexes
+
+    errors: list[str] = []
+    indexes = load_all_indexes()
+    html_paths = sorted(site_root.rglob("*.html"))
+    if len(html_paths) != 13:
+        errors.append(
+            f"fixed links: expected 13 HTML pages, found {len(html_paths)}"
+        )
+    repository_blob_prefixes = tuple(
+        snapshot.blob_url_template.partition("/blob/")[0] + "/blob/"
+        for snapshot in registry.values()
+    )
+
+    for page_path in html_paths:
+        relative = page_path.relative_to(site_root).as_posix()
+        document = parse_html(page_path)
+        for anchor in document.anchors:
+            attrs = anchor.attributes
+            href = attrs.get("href", "")
+            marked = "data-fixed-source-link" in attrs
+            if href.startswith(repository_blob_prefixes) and not marked:
+                errors.append(f"{relative}: unmarked fixed source link {href}")
+                continue
+            if not marked:
+                continue
+            snapshot_id = attrs.get("data-snapshot-id", "")
+            source_path = attrs.get("data-source-path", "")
+            if snapshot_id not in registry:
+                errors.append(
+                    f"{relative}: fixed link unknown snapshot {snapshot_id}"
+                )
+                continue
+            snapshot = registry[snapshot_id]
+            revision = href.partition("/blob/")[2].partition("/")[0]
+            if revision in {"main", "master"}:
+                errors.append(
+                    f"{relative}: fixed link {snapshot_id}: moving revision "
+                    f"{revision}"
+                )
+                continue
+            if revision != snapshot.revision:
+                errors.append(
+                    f"{relative}: fixed link {snapshot_id}: revision "
+                    f"{revision} expected {snapshot.revision}"
+                )
+                continue
+            indexed = {
+                row["path"]: row for row in indexes[snapshot_id]["files"]
+            }
+            if source_path not in indexed:
+                errors.append(
+                    f"{relative}: fixed link {snapshot_id}: unknown path "
+                    f"{source_path}"
+                )
+                continue
+            row = indexed[source_path]
+            file_only = attrs.get("data-file-only") == "true"
+            if row["kind"] == "binary":
+                if (
+                    not file_only
+                    or "#" in href
+                    or "data-start-line" in attrs
+                    or "data-end-line" in attrs
+                ):
+                    errors.append(
+                        f"{relative}: binary fixed link {snapshot_id}:"
+                        f"{source_path} must be file-only"
+                    )
+                    continue
+                expected_url = _expected_fixed_url(
+                    snapshot, source_path, file_only=True
+                )
+            else:
+                try:
+                    start = int(attrs["data-start-line"])
+                    end = int(attrs["data-end-line"])
+                except (KeyError, ValueError):
+                    errors.append(
+                        f"{relative}: text fixed link {snapshot_id}:"
+                        f"{source_path} missing line range"
+                    )
+                    continue
+                if file_only or not (1 <= start <= end <= row["line_count"]):
+                    errors.append(
+                        f"{relative}: text fixed link {snapshot_id}:"
+                        f"{source_path} invalid line range {start}-{end}"
+                    )
+                    continue
+                expected_url = _expected_fixed_url(
+                    snapshot, source_path, start, end
+                )
+            if href != expected_url:
+                errors.append(
+                    f"{relative}: fixed link {snapshot_id}:{source_path} "
+                    "URL mismatch"
+                )
+    return errors
+
+
+RESTRICTED_DIRS = {
+    "model",
+    "models",
+    "weight",
+    "weights",
+    "dataset",
+    "datasets",
+    "data",
+    "checkpoint",
+    "checkpoints",
+}
+RESTRICTED_SUFFIXES = {
+    ".pem",
+    ".key",
+    ".safetensors",
+    ".ckpt",
+    ".pt",
+    ".pth",
+    ".bin",
+    ".onnx",
+    ".h5",
+    ".hdf5",
+    ".npy",
+    ".npz",
+    ".parquet",
+    ".arrow",
+    ".feather",
+    ".tfrecord",
+    ".mdb",
+    ".sqlite",
+    ".db",
+    ".jsonl",
+    ".gguf",
+    ".wav",
+    ".mp3",
+    ".m4a",
+    ".flac",
+}
+LFS_HEADER = b"version https://git-lfs.github.com/spec/v1"
+
+
+def validate_public_tracking(root: Path, tracked_paths=None) -> list[str]:
+    if tracked_paths is None:
+        raw = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=root,
+            check=True,
+            stdout=subprocess.PIPE,
+        ).stdout
+        tracked_paths = [
+            os.fsdecode(item) for item in raw.split(b"\0") if item
+        ]
+    errors: list[str] = []
+    for value in tracked_paths:
+        relative = os.fsdecode(value)
+        parts = PurePosixPath(relative).parts
+        lowered = tuple(part.casefold() for part in parts)
+        private_checkout = any(
+            lowered[index] == ".superpowers"
+            and index + 1 < len(lowered)
+            and lowered[index + 1] == "source-checkouts"
+            for index in range(len(lowered))
+        )
+        references_dir = "references" in lowered[:-1]
+        env_file = any(
+            part == ".env" or part.startswith(".env.") for part in lowered
+        )
+        restricted_dir = any(
+            part in RESTRICTED_DIRS for part in lowered[:-1]
+        )
+        restricted_suffix = (
+            PurePosixPath(relative).suffix.casefold() in RESTRICTED_SUFFIXES
+        )
+        if (
+            private_checkout
+            or references_dir
+            or env_file
+            or restricted_dir
+            or restricted_suffix
+        ):
+            errors.append(f"public tracking: restricted path {relative}")
+            continue
+        candidate = root / relative
+        if candidate.is_file():
+            with candidate.open("rb") as handle:
+                if handle.read(len(LFS_HEADER)) == LFS_HEADER:
+                    errors.append(
+                        f"public tracking: Git LFS pointer {relative}"
+                    )
     return errors

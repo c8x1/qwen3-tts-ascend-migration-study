@@ -5,6 +5,7 @@ import csv
 import io
 import json
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -15,19 +16,76 @@ from unittest.mock import patch
 
 from scripts import phase2_contracts as contracts
 from scripts.phase2_contracts import (
+    DECISION_REFS,
     Snapshot,
     _materialized_digest,
+    load_evidence,
     load_snapshot_registry,
     load_source_index_schema,
+    validate_cross_contracts,
+    validate_fixed_links,
+    validate_generated_site,
+    validate_public_tracking,
     validate_snapshot_registry,
     validate_source_index,
 )
+from scripts.site_builder import build_site, load_page_catalogs
 from scripts import validate_phase2 as validate_phase2_cli
 from scripts.validate_phase2 import validate_indexes
 
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "research" / "source-snapshots.json"
+
+
+def full_inputs():
+    catalogs = [
+        ROOT / "content/site-foundation.json",
+        ROOT / "content/target-architecture.json",
+        ROOT / "content/target-training.json",
+    ]
+    pages = load_page_catalogs(catalogs)
+    evidence = load_evidence(ROOT / "research/target-evidence.json")
+    with (ROOT / "research/target-coverage.csv").open(
+        encoding="utf-8", newline=""
+    ) as handle:
+        coverage = list(csv.DictReader(handle))
+    return catalogs, pages, evidence, coverage
+
+
+def generated_copy():
+    context = tempfile.TemporaryDirectory()
+    workspace = Path(context.name)
+    root = workspace / "site"
+    catalogs, pages, evidence, coverage = full_inputs()
+    build_site(root, catalogs)
+    for name in ("app.js", "theme.css", "layout.css"):
+        destination = root / "assets" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / "site" / "assets" / name, destination)
+    for ref in DECISION_REFS:
+        destination = workspace / ref
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / ref, destination)
+    return context, root, pages, evidence, coverage
+
+
+def drop_page_evidence(pages, evidence_id):
+    mutated = copy.deepcopy(pages)
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if key == "evidence_ids":
+                    value[key] = [item for item in child if item != evidence_id]
+                else:
+                    visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(mutated)
+    return mutated
 
 
 def valid_minimal_index(*, snapshot):
@@ -1067,8 +1125,9 @@ class TargetCoverageTest(unittest.TestCase):
         )
         self.assertEqual(combined.returncode, 0, combined.stdout + combined.stderr)
         match = re.fullmatch(
-            r"validated Phase 2 data: 4 indexes, (\d+) evidence records, "
-            r"35 target coverage rows, 0 omissions\n",
+            r"validated Phase 2: 4 indexes / 3270 files, (\d+) evidence "
+            r"records, 35 coverage rows, 13 pages, 0 broken links, "
+            r"0 omissions\n",
             combined.stdout,
         )
         self.assertIsNotNone(match, combined.stdout)
@@ -1088,13 +1147,164 @@ class TargetCoverageTest(unittest.TestCase):
                 side_effect=AssertionError("evidence validation must not run"),
             ) as evidence_loader,
             patch.object(sys, "argv", ["validate_phase2.py"]),
-            contextlib.redirect_stdout(output),
+            contextlib.redirect_stderr(output),
         ):
             self.assertEqual(1, validate_phase2_cli.main())
         evidence_loader.assert_not_called()
         self.assertEqual(
             "qwen3-tts-022e286b.json: index.files: expected array\n",
             output.getvalue(),
+        )
+
+
+class GeneratedSiteContractTest(unittest.TestCase):
+    def test_committed_catalog_coverage_and_evidence_bridge_is_complete(self):
+        _, pages, evidence, coverage = full_inputs()
+        self.assertEqual(validate_cross_contracts(pages, evidence, coverage), [])
+
+    def test_broken_link_aria_and_remote_runtime_have_stable_errors(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                "</main>",
+                '<a href="target/removed.html">x</a>'
+                '<button aria-controls="missing-node">x</button>'
+                '<script src="https://example.com/x.js"></script></main>',
+            ),
+            encoding="utf-8",
+        )
+        errors = validate_generated_site(root, pages, evidence, coverage)
+        self.assertIn("index.html: broken local link target/removed.html", errors)
+        self.assertIn(
+            "index.html: aria-controls missing-node has no matching id", errors
+        )
+        self.assertIn(
+            "index.html: remote runtime resource https://example.com/x.js", errors
+        )
+
+    def test_only_allowlisted_decision_links_may_leave_site_root(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        errors = validate_generated_site(root, pages, evidence, coverage)
+        self.assertFalse(
+            any("reference-selection-proposal.md" in error for error in errors)
+        )
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                "</main>", '<a href="../IMPLEMENTATION_NOTES.md">escape</a></main>'
+            ),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "index.html: local link escapes site ../IMPLEMENTATION_NOTES.md",
+            validate_generated_site(root, pages, evidence, coverage),
+        )
+
+    def test_fixed_link_rejects_moving_qwen_revision(self):
+        context, root, _, _, _ = generated_copy()
+        self.addCleanup(context.cleanup)
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        revision = registry["qwen3-tts-022e286b"].revision
+        page_path = root / "indexes/source-files.html"
+        html = page_path.read_text(encoding="utf-8")
+        self.assertIn(f"/blob/{revision}/", html)
+        page_path.write_text(
+            html.replace(f"/blob/{revision}/", "/blob/main/", 1),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "indexes/source-files.html: fixed link qwen3-tts-022e286b: moving revision main",
+            validate_fixed_links(root, registry),
+        )
+
+    def test_public_tracking_rejects_restricted_path_and_lfs_pointer_but_allows_normal_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "research").mkdir()
+            (root / "README.md").write_text(
+                "normal documentation\n", encoding="utf-8"
+            )
+            (root / "research/source-ledger.csv").write_text(
+                "id,url\n", encoding="utf-8"
+            )
+            self.assertEqual(
+                validate_public_tracking(
+                    root, ["README.md", "research/source-ledger.csv"]
+                ),
+                [],
+            )
+            self.assertIn(
+                "public tracking: restricted path models/weights.bin",
+                validate_public_tracking(root, ["models/weights.bin"]),
+            )
+            self.assertIn(
+                "public tracking: restricted path references/private.md",
+                validate_public_tracking(root, ["references/private.md"]),
+            )
+            for restricted in ("artifact.gguf", "audio.flac"):
+                self.assertIn(
+                    f"public tracking: restricted path {restricted}",
+                    validate_public_tracking(root, [restricted]),
+                )
+            (root / "pointer.txt").write_text(
+                "version https://git-lfs.github.com/spec/v1\n"
+                "oid sha256:0123456789abcdef\nsize 12\n",
+                encoding="utf-8",
+            )
+            self.assertIn(
+                "public tracking: Git LFS pointer pointer.txt",
+                validate_public_tracking(root, ["pointer.txt"]),
+            )
+
+    def test_coverage_catalog_evidence_and_important_bridge_mutations(self):
+        _, pages, evidence, coverage = full_inputs()
+        missing_path = [
+            row
+            for row in coverage
+            if row["path"] != "qwen_tts/inference/qwen3_tts_model.py"
+        ]
+        errors = validate_cross_contracts(pages, evidence, missing_path)
+        self.assertIn(
+            "target coverage: missing qwen_tts/inference/qwen3_tts_model.py", errors
+        )
+        bad_section = copy.deepcopy(coverage)
+        next(
+            row for row in bad_section if row["path"] == "qwen_tts/core/__init__.py"
+        )["section"] = "missing"
+        errors = validate_cross_contracts(pages, evidence, bad_section)
+        self.assertIn(
+            "coverage qwen_tts/core/__init__.py: missing section "
+            "target/tokenizer-12hz.html#missing",
+            errors,
+        )
+        bad_pages = copy.deepcopy(pages)
+        bad_pages[2]["sections"][0]["blocks"][0]["evidence_ids"] = [
+            "TGT-NOT-REAL"
+        ]
+        errors = validate_cross_contracts(bad_pages, evidence, coverage)
+        self.assertTrue(
+            any("unknown evidence TGT-NOT-REAL" in error for error in errors)
+        )
+        without_lane = drop_page_evidence(pages, "PH1-ENV-LANES")
+        errors = validate_cross_contracts(without_lane, evidence, coverage)
+        self.assertIn(
+            "important evidence PH1-ENV-LANES: not referenced by any page", errors
+        )
+
+    def test_unexpected_generated_output_is_rejected(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        stale = root / "target/stale.html"
+        stale.parent.mkdir(parents=True, exist_ok=True)
+        stale.write_text("stale", encoding="utf-8")
+        self.assertIn(
+            "site: unexpected generated output target/stale.html",
+            validate_generated_site(root, pages, evidence, coverage),
         )
 
 

@@ -465,7 +465,7 @@
               "type": "paragraph",
               "text": "待真机验证：公开可执行性 unknown。官方源码、报告与 collections 没有建立一个固定的公开可执行 25Hz checkpoint，因此源码类存在不能替代 checkpoint 身份与可执行性验证。",
               "state": "pending_hardware",
-              "evidence_ids": ["TGT-TOK25-002"]
+              "evidence_ids": ["TGT-TOK25-002", "TGT-TOK25-014"]
             },
             {
               "type": "table",
@@ -475,10 +475,11 @@
                 ["Speech VQ 依赖", "qwen_tts/core/tokenizer_25hz/vq/speech_vq.py", "L16–L150"],
                 ["Whisper attention", "qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py", "L29–L191"],
                 ["VQ 核心", "qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "L113–L521"],
+                ["Mel filter 资产", "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz", "binary / 无行号"],
                 ["主模型资源装载", "qwen_tts/core/models/modeling_qwen3_tts.py", "L1891–L1936"]
               ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-002"]}
+            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-002", "TGT-TOK25-014"]}
           ]
         },
         {
