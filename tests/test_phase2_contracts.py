@@ -14,6 +14,7 @@ from scripts.phase2_contracts import (
     validate_snapshot_registry,
     validate_source_index,
 )
+from scripts.validate_phase2 import validate_indexes
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -520,6 +521,43 @@ class SourceIndexContractTest(unittest.TestCase):
             pairs = collections.Counter((row["path"], row["qualname"]) for row in data["symbols"])
             self.assertEqual(sum(count > 1 for count in pairs.values()), expected)
             self.assertEqual(len({row["id"] for row in data["symbols"]}), len(data["symbols"]))
+
+    def test_validator_rejects_unencodable_metadata_without_raising(self):
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        snapshot = registry["qwen3-tts-022e286b"]
+        mutations = {
+            "unknown field": lambda data: data.__setitem__("extra", "\ud800"),
+            "schema string": lambda data: data["snapshot"].__setitem__(
+                "project", "\ud800"
+            ),
+        }
+        for case, mutate in mutations.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                (root / "research/indexes").mkdir(parents=True)
+                (root / "research/source-snapshots.json").write_text(
+                    (ROOT / "research/source-snapshots.json").read_text(
+                        encoding="utf-8"
+                    ),
+                    encoding="utf-8",
+                )
+                data = valid_minimal_index(snapshot=snapshot)
+                mutate(data)
+                index_path = (
+                    root / "research/indexes/qwen3-tts-022e286b.json"
+                )
+                index_path.write_text(
+                    json.dumps(data, ensure_ascii=True), encoding="utf-8"
+                )
+
+                errors = validate_indexes(root)
+
+                self.assertIn(
+                    "qwen3-tts-022e286b.json: content digest input is not "
+                    "UTF-8 encodable",
+                    errors,
+                )
+                self.assertTrue(all("\n" not in error for error in errors))
 
 
 if __name__ == "__main__":

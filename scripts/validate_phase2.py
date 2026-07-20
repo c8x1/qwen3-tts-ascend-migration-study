@@ -46,6 +46,23 @@ def validate_indexes(root: Path = ROOT) -> list[str]:
             errors.append(f"{label}: unreadable: {error}")
             continue
 
+        encoded_payload = None
+        if isinstance(data, dict):
+            payload = dict(data)
+            payload.pop("content_digest", None)
+            try:
+                encoded_payload = json.dumps(
+                    payload,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            except UnicodeEncodeError:
+                errors.append(
+                    f"{label}: content digest input is not UTF-8 encodable"
+                )
+                continue
+
         errors.extend(
             f"{label}: {error}"
             for error in validate_source_index(data, registry)
@@ -63,16 +80,8 @@ def validate_indexes(root: Path = ROOT) -> list[str]:
                     f"{label}: expected {snapshot.materialized_file_count} files"
                 )
 
-        payload = dict(data)
-        actual = payload.pop("content_digest", None)
-        expected = hashlib.sha256(
-            json.dumps(
-                payload,
-                ensure_ascii=False,
-                sort_keys=True,
-                separators=(",", ":"),
-            ).encode()
-        ).hexdigest()
+        actual = data.get("content_digest")
+        expected = hashlib.sha256(encoded_payload).hexdigest()
         if actual != expected:
             errors.append(f"{label}: content digest mismatch")
 
