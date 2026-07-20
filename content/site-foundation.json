@@ -1,0 +1,247 @@
+{
+  "schema_version": 1,
+  "pages": [
+    {
+      "slug": "index.html",
+      "title": "Qwen3-TTS 官方目标源码学习路径",
+      "summary": "以固定源码快照和证据记录为边界，从 PyTorch 单卡基础逐步进入 Qwen3-TTS 包、模型、音频 tokenizer、训练契约与 SFT。",
+      "order": 1,
+      "group": "foundation",
+      "objectives": [
+        "理解本知识站的静态源码阅读边界与分阶段学习顺序",
+        "区分项目原生环境与 CANN 8.5.2 待验证环境"
+      ],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "public-scope",
+          "title": "公开范围与许可证边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "本阶段只对固定的 Qwen3-TTS 官方公开源码进行静态阅读，并核对源码树中的 Apache License 2.0 文本；权重、数据与其他材料需要分别确认许可。本阶段没有运行 Qwen3-TTS 训练。这里不声称训练可运行，也不声称任何 CANN 版本兼容。",
+              "state": "verified",
+              "evidence_ids": ["TGT-SCOPE-002", "TGT-PKG-003"]
+            },
+            {
+              "type": "source_refs",
+              "evidence_ids": ["TGT-SCOPE-002", "TGT-PKG-003"]
+            }
+          ]
+        },
+        {
+          "id": "learning-path",
+          "title": "从单卡基础到 SFT 的学习路径",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "PyTorch 单卡", "path": "基础张量与训练循环", "symbol": "tensor → loss → backward → step", "evidence_ids": []},
+                {"label": "包与 API", "path": "qwen_tts", "symbol": "公开入口与 from_pretrained", "evidence_ids": ["TGT-PKG-001", "TGT-API-001"]},
+                {"label": "模型", "path": "qwen_tts/core/models", "symbol": "Talker 与条件生成", "evidence_ids": ["TGT-MODEL-002", "TGT-MODEL-003"]},
+                {"label": "Tokenizers", "path": "qwen_tts/core/tokenizer_12hz 与 tokenizer_25hz", "symbol": "encode / decode", "evidence_ids": ["TGT-TOK12-001", "TGT-TOK25-001"]},
+                {"label": "契约", "path": "finetuning/dataset.py", "symbol": "数据、设备与导出边界", "evidence_ids": ["TGT-DATA-002", "TGT-EXPORT-001"]},
+                {"label": "SFT", "path": "finetuning/sft_12hz.py", "symbol": "loss → backward → optimizer", "evidence_ids": ["TGT-TRAIN-005"]}
+              ]
+            }
+          ]
+        },
+        {
+          "id": "environment-lanes",
+          "title": "两条环境车道",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "项目原生学习车道固定为 PyTorch 2.7.1 + CANN 8.5.0；目标验证车道固定为 PyTorch 2.7.1 + CANN 8.5.2 unknown。CANN 8.5.2 兼容性：unknown，待真机验证。两条车道不能互相替代结论。",
+              "state": "pending_hardware",
+              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+            },
+            {
+              "type": "table",
+              "headers": ["车道", "软件组合", "用途", "结论状态"],
+              "rows": [
+                ["project-native", "2.7.1 + 8.5.0", "复现参考项目原生环境并学习源码", "项目记录"],
+                ["target", "2.7.1 + 8.5.2 unknown", "面向目标环境进行真机兼容性验证", "unknown / 待真机验证"]
+              ]
+            },
+            {
+              "type": "source_refs",
+              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+            }
+          ]
+        },
+        {
+          "id": "phase-boundary",
+          "title": "本任务之后的五个工作包",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "以下五个工作包明确延期，不由本 foundation 生成器提前给出结论。",
+              "state": "project_claim",
+              "evidence_ids": []
+            },
+            {
+              "type": "table",
+              "headers": ["序号", "延期工作包", "当前边界"],
+              "rows": [
+                ["1", "目标源码架构走读", "后续生成 target 架构页面"],
+                ["2", "MindSpeed-MM 训练栈映射", "后续建立主参考映射"],
+                ["3", "分布式与性能契约", "后续结合规模化卫星证据"],
+                ["4", "环境与兼容性验证", "后续在 CANN 8.5.2 真机执行"],
+                ["5", "单机到规模化 SFT 教程", "后续在契约与实验结果齐备后编写"]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "indexes/source-files.html",
+      "title": "四个固定快照文件索引",
+      "summary": "按固定快照、文件类型与路径浏览四个批准源码树的文件元数据，并使用固定版本链接复核。",
+      "order": 11,
+      "group": "foundation",
+      "objectives": ["按快照、文件类型和路径定位固定源码文件"],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "snapshot-provenance",
+          "title": "快照来源与获取方式",
+          "blocks": [
+            {
+              "type": "table",
+              "headers": ["快照", "角色", "获取方式", "含义"],
+              "rows": [
+                ["qwen3-tts-022e286b", "official-target", "Git sparse checkout", "固定 Git tree 的源码子集"],
+                ["mindspeed-mm-0edd553e", "main-reference", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
+                ["mindspeed-llm-434baff7", "scale-satellite", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
+                ["moss-tts-ad99ec5f", "speech-codec-satellite", "Git sparse checkout", "固定 Git tree 的源码子集"]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "file-filters",
+          "title": "按 snapshot、kind 与 path 阅读",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "文件目录完整列出 snapshot、kind、path、字节数、SHA-256 与固定链接。可用浏览器页内查找组合 snapshot、kind 和 path；索引不包含源码正文。",
+              "state": "verified",
+              "evidence_ids": []
+            },
+            {"type": "index_table", "dataset": "files"}
+          ]
+        },
+        {
+          "id": "future-interface",
+          "title": "后续页面消费接口",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "后续 main、scale 与 speech 页面只消费 path、hash 和 fixed link：路径用于定位，SHA-256 用于身份校验，固定链接用于回到批准版本。文本记录的固定链接带行锚点，binary 记录只链接 blob，不伪造行号。",
+              "state": "project_claim",
+              "evidence_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "indexes/symbols-configs.html",
+      "title": "符号与配置项索引",
+      "summary": "浏览四个固定快照中由 AST 与静态键提取器生成的符号和配置元数据，不暴露配置值。",
+      "order": 12,
+      "group": "foundation",
+      "objectives": ["按限定名、配置键、文件和行号定位静态索引记录"],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "symbol-index",
+          "title": "符号索引",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "符号记录展示 snapshot、qualname、kind、path、起止行与固定链接。",
+              "state": "verified",
+              "evidence_ids": []
+            },
+            {"type": "index_table", "dataset": "symbols"}
+          ]
+        },
+        {
+          "id": "config-index",
+          "title": "配置项索引",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "配置记录只展示 key、owner、kind、path、line 与固定链接，绝不展示配置值。",
+              "state": "verified",
+              "evidence_ids": []
+            },
+            {"type": "index_table", "dataset": "configs"}
+          ]
+        },
+        {
+          "id": "limits",
+          "title": "静态索引的限制",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "AST 符号与静态键索引不是运行时调用图：它们能说明定义和键出现在哪里，不能证明动态分派、导入副作用、实际取值或执行顺序。",
+              "state": "inference",
+              "evidence_ids": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "search.html",
+      "title": "全站搜索",
+      "summary": "离线搜索页面标题、摘要、章节标题以及固定快照的文件、符号和配置元数据。",
+      "order": 13,
+      "group": "foundation",
+      "objectives": ["在不请求远程资源的情况下检索站点与源码索引元数据"],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "search-results",
+          "title": "本地搜索结果",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "搜索结果由页面内嵌 JSON 驱动；直接使用 ?q= 查询也会初始化输入框和结果，提交后只更新当前 URL 历史状态。",
+              "state": "project_claim",
+              "evidence_ids": []
+            }
+          ]
+        },
+        {
+          "id": "no-script-index",
+          "title": "无脚本页面目录",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "关闭 JavaScript 时，初始 HTML 仍提供按标题字母顺序排列的全部页面链接。",
+              "state": "project_claim",
+              "evidence_ids": []
+            }
+          ]
+        },
+        {
+          "id": "search-scope",
+          "title": "搜索范围与数据边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "搜索覆盖页面 title、summary、headings，以及四个快照所有 files、symbols、configs 的路径、限定名和键元数据；绝不包含完整源码正文或配置值。",
+              "state": "verified",
+              "evidence_ids": []
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

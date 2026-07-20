@@ -85,4 +85,17 @@ pre { margin: 0; padding: 1rem; overflow-x: auto; border-radius: 0 0 .55rem .55r
 .page-nav a { color: var(--accent); }
 .site-footer { padding: 1rem; border-top: 1px solid var(--border); color: var(--muted); background: var(--header); text-align: center; }
 .site-footer p { margin: 0; font-size: .75rem; }
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .55rem; margin: 1rem 0; }
+.evidence-state { display: inline-block; padding: .25rem .5rem; border: 1px solid var(--border); border-radius: .35rem; color: var(--ink); background: #f5ede1; font-size: .72rem; font-weight: 700; }
+.evidence-state[data-state="verified"] { color: #315b42; border-color: #9fbaa5; background: #dfeade; }
+.evidence-state[data-state="project_claim"] { color: #543f30; border-color: #bca88f; background: #ede1d2; }
+.evidence-state[data-state="inference"] { color: #6b511d; border-color: #d0b86f; background: #f4e8c6; }
+.evidence-state[data-state="pending_hardware"] { color: #713a2e; border-color: #d7ab9f; background: #f0dcd4; }
+.contract-table, .index-table { width: 100%; border-collapse: collapse; color: var(--ink); background: #fffaf2; font-size: .78rem; }
+.contract-table th, .contract-table td, .index-table th, .index-table td { padding: .5rem .6rem; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+.contract-table th, .index-table th { color: #3e3127; background: var(--header); }
+.index-table code, .index-table a { color: var(--accent); }
+.search-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: .65rem; }
+.search-results a { display: block; padding: .75rem; border: 1px solid var(--border); border-radius: .5rem; color: #663c2f; background: #faf6ef; text-decoration: none; }
+.search-results a:hover { border-color: var(--accent); background: #f4e9dc; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

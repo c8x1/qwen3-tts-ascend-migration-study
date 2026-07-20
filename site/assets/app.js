@@ -207,13 +207,24 @@ class ChapterTreeController {
   }
 }
 
-class SearchController {
-  constructor(documentRef = document) {
+export class SearchController {
+  constructor(documentRef = document, windowRef = window) {
     this.document = documentRef;
+    this.window = windowRef;
     this.root = documentRef.documentElement;
     this.button = documentRef.querySelector('.search-enhancement');
     this.form = documentRef.querySelector('#site-search');
     this.input = this.form?.querySelector('input[type="search"]');
+    this.results = documentRef.querySelector('.search-results');
+    this.resultsStatus = documentRef.querySelector('#search-results-status');
+    const data = documentRef.querySelector('#search-data');
+    this.data = null;
+    if (data) {
+      try {
+        const parsed = JSON.parse(data.textContent);
+        if (Array.isArray(parsed)) this.data = parsed;
+      } catch {}
+    }
   }
 
   close() {
@@ -222,7 +233,35 @@ class SearchController {
     this.button?.setAttribute('aria-label', '打开站内搜索');
   }
 
+  renderResults(query) {
+    if (!this.results || !this.resultsStatus || !this.data) return;
+    const terms = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const matches = this.data
+      .filter((item) => terms.every((term) => item.searchable.includes(term)))
+      .slice(0, 100);
+    this.results.replaceChildren(...matches.map((item) => {
+      const link = this.document.createElement('a');
+      link.href = item.href;
+      link.textContent = `${item.title} · ${item.kind}`;
+      return link;
+    }));
+    this.resultsStatus.textContent = terms.length ? `找到 ${matches.length} 条结果` : '请输入关键词';
+  }
+
   init() {
+    const query = new URLSearchParams(this.window.location.search).get('q') ?? '';
+    if (this.input) this.input.value = query;
+    this.renderResults(query);
+    this.form?.addEventListener('submit', (event) => {
+      if (!this.data || this.window.location.pathname.split('/').pop() !== 'search.html') return;
+      event.preventDefault();
+      const value = this.input?.value ?? '';
+      const url = new URL(this.window.location.href);
+      if (value.trim()) url.searchParams.set('q', value);
+      else url.searchParams.delete('q');
+      this.window.history.replaceState({}, '', url);
+      this.renderResults(value);
+    });
     this.button?.addEventListener('click', () => {
       const opening = !this.root.classList.contains('search-open');
       if (!opening) {
