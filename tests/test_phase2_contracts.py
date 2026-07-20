@@ -1,3 +1,4 @@
+import collections
 import copy
 import json
 import tempfile
@@ -17,6 +18,58 @@ from scripts.phase2_contracts import (
 
 ROOT = Path(__file__).resolve().parents[1]
 REGISTRY_PATH = ROOT / "research" / "source-snapshots.json"
+
+
+def valid_minimal_index(*, snapshot):
+    data = {
+        "schema_version": 1,
+        "snapshot": {
+            "snapshot_id": snapshot.snapshot_id,
+            "project": snapshot.project,
+            "role": snapshot.role,
+            "revision": snapshot.revision,
+            "acquisition_kind": snapshot.acquisition_kind,
+            "content_id": snapshot.content_id,
+        },
+        "indexer_version": "1.0",
+        "files": [
+            {
+                "path": "pkg/module.py",
+                "bytes": 12,
+                "sha256": "c" * 64,
+                "kind": "python",
+                "line_count": 8,
+            }
+        ],
+        "symbols": [
+            {
+                "id": "pkg/module.py:Widget.run:2",
+                "path": "pkg/module.py",
+                "qualname": "Widget.run",
+                "name": "run",
+                "kind": "method",
+                "line": 2,
+                "end_line": 5,
+            }
+        ],
+        "configs": [
+            {
+                "id": "pkg/module.py:batch_size:7",
+                "path": "pkg/module.py",
+                "key": "batch_size",
+                "owner": "Widget",
+                "kind": "python-assignment",
+                "line": 7,
+            }
+        ],
+        "content_digest": "",
+    }
+    refresh_materialized_digest(data)
+    return data
+
+
+def refresh_materialized_digest(data):
+    data["content_digest"] = _materialized_digest(data)
 
 
 class SnapshotRegistryTests(unittest.TestCase):
@@ -213,55 +266,11 @@ class SourceIndexContractTests(unittest.TestCase):
         self.registry = {self.snapshot.snapshot_id: self.snapshot}
 
     def valid_index(self):
-        data = {
-            "schema_version": 1,
-            "snapshot": {
-                "snapshot_id": self.snapshot.snapshot_id,
-                "project": self.snapshot.project,
-                "role": self.snapshot.role,
-                "revision": self.snapshot.revision,
-                "acquisition_kind": self.snapshot.acquisition_kind,
-                "content_id": self.snapshot.content_id,
-            },
-            "indexer_version": "1.0",
-            "files": [
-                {
-                    "path": "pkg/module.py",
-                    "bytes": 12,
-                    "sha256": "c" * 64,
-                    "kind": "python",
-                    "line_count": 8,
-                }
-            ],
-            "symbols": [
-                {
-                    "id": "pkg/module.py:Widget.run:2",
-                    "path": "pkg/module.py",
-                    "qualname": "Widget.run",
-                    "name": "run",
-                    "kind": "method",
-                    "line": 2,
-                    "end_line": 5,
-                }
-            ],
-            "configs": [
-                {
-                    "id": "pkg/module.py:batch_size:7",
-                    "path": "pkg/module.py",
-                    "key": "batch_size",
-                    "owner": "Widget",
-                    "kind": "python-assignment",
-                    "line": 7,
-                }
-            ],
-            "content_digest": "",
-        }
-        self.refresh_digest(data)
-        return data
+        return valid_minimal_index(snapshot=self.snapshot)
 
     @staticmethod
     def refresh_digest(data):
-        data["content_digest"] = _materialized_digest(data)
+        refresh_materialized_digest(data)
 
     def errors_after(self, mutate, *, refresh=True):
         data = self.valid_index()
@@ -476,6 +485,41 @@ class SourceIndexContractTests(unittest.TestCase):
         for value in (None, [], "index", 1, True):
             with self.subTest(value=value):
                 self.assertEqual(["index: expected object"], validate_source_index(value, self.registry))
+
+
+class SourceIndexContractTest(unittest.TestCase):
+    def test_index_rejects_absolute_path_after_schema_validation(self):
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        data = valid_minimal_index(snapshot=registry["qwen3-tts-022e286b"])
+        data["files"][0]["path"] = "/Users/me/source.py"
+        data["symbols"][0]["path"] = "/Users/me/source.py"
+        data["symbols"][0]["id"] = "/Users/me/source.py:f:1"
+        refresh_materialized_digest(data)
+        errors = validate_source_index(data, registry)
+        self.assertTrue(any("absolute path forbidden" in error for error in errors))
+
+    def test_index_rejects_unknown_body_at_schema_layer(self):
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        data = valid_minimal_index(snapshot=registry["qwen3-tts-022e286b"])
+        data["files"][0]["body"] = "print(1)"
+        errors = validate_source_index(data, registry)
+        self.assertIn("index.files[0]: unknown field body", errors)
+
+    def test_tracked_indexes_match_registry_counts_and_revisions(self):
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        for snapshot_id, snapshot in registry.items():
+            data = json.loads((ROOT / "research/indexes" / f"{snapshot_id}.json").read_text())
+            self.assertEqual(data["snapshot"]["revision"], snapshot.revision)
+            self.assertEqual(len(data["files"]), snapshot.materialized_file_count)
+            self.assertEqual(validate_source_index(data, registry), [])
+
+    def test_real_indexes_keep_duplicate_qualnames_but_unique_line_ids(self):
+        expected_groups = {"mindspeed-mm-0edd553e": 10, "moss-tts-ad99ec5f": 1}
+        for snapshot_id, expected in expected_groups.items():
+            data = json.loads((ROOT / "research/indexes" / f"{snapshot_id}.json").read_text())
+            pairs = collections.Counter((row["path"], row["qualname"]) for row in data["symbols"])
+            self.assertEqual(sum(count > 1 for count in pairs.values()), expected)
+            self.assertEqual(len({row["id"] for row in data["symbols"]}), len(data["symbols"]))
 
 
 if __name__ == "__main__":
