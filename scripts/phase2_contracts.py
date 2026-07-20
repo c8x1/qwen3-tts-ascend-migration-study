@@ -202,7 +202,7 @@ def validate_snapshot_registry(data: object) -> list[str]:
         complete = _validate_exact_fields(row, _SNAPSHOT_FIELDS, row_path, errors)
         for field in sorted(_STRING_FIELDS & set(row)):
             if not isinstance(row[field], str) or not row[field]:
-                errors.append(f"{row_path}.{field}: expected nonempty string")
+                errors.append(f"{row_path}.{field}: expected non-empty string")
 
         snapshot_id = row.get("snapshot_id")
         approved = _APPROVED.get(snapshot_id) if isinstance(snapshot_id, str) else None
@@ -232,14 +232,17 @@ def validate_snapshot_registry(data: object) -> list[str]:
                 errors.append(f"{row_path}.excluded.paths: expected array")
             else:
                 seen_paths: set[str] = set()
-                for path_index, excluded_path in enumerate(paths):
-                    item_path = f"{row_path}.excluded.paths[{path_index}]"
+                paths_path = f"{row_path}.excluded.paths"
+                for excluded_path in paths:
                     if not _relative_posix(excluded_path):
-                        errors.append(f"{item_path}: expected relative POSIX path")
-                    elif excluded_path in seen_paths:
-                        errors.append(f"{item_path}: duplicate path {excluded_path}")
-                    else:
-                        seen_paths.add(excluded_path)
+                        errors.append(
+                            f"{paths_path}: expected relative POSIX path {excluded_path}"
+                        )
+                    if isinstance(excluded_path, str):
+                        if excluded_path in seen_paths:
+                            errors.append(f"{paths_path}: duplicate path")
+                        else:
+                            seen_paths.add(excluded_path)
             if not isinstance(excluded.get("reason"), str) or not excluded.get("reason"):
                 errors.append(f"{row_path}.excluded.reason: expected nonempty string")
 
@@ -511,7 +514,7 @@ def validate_source_index(
             errors.append(f"index.symbols[{index}].path: not in files")
         elif owner["line_count"] is None:
             errors.append(
-                f"index.symbols[{index}].path: binary owner has no line count"
+                f"index.symbols[{index}].line: exceeds file line_count"
             )
         else:
             if row["line"] > owner["line_count"]:
@@ -532,7 +535,7 @@ def validate_source_index(
             errors.append(f"index.configs[{index}].path: not in files")
         elif owner["line_count"] is None:
             errors.append(
-                f"index.configs[{index}].path: binary owner has no line count"
+                f"index.configs[{index}].line: exceeds file line_count"
             )
         elif row["line"] > owner["line_count"]:
             errors.append(

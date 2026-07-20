@@ -128,6 +128,39 @@ class SnapshotRegistryTests(unittest.TestCase):
                     any("expected relative POSIX path" in error for error in validate_snapshot_registry(mutated))
                 )
 
+    def test_registry_preserves_stable_regression_errors(self):
+        mutated = copy.deepcopy(self.data)
+        mutated["snapshots"][0]["snapshot_id"] = "unknown-snapshot"
+        mutated["snapshots"][1]["project"] = ""
+        mutated["snapshots"][2]["materialized_file_count"] = -1
+        mutated["snapshots"][3]["excluded"]["paths"] = [
+            "../escape",
+            "../escape",
+        ]
+
+        errors = validate_snapshot_registry(mutated)
+        self.assertIn(
+            "snapshots[0].snapshot_id: unapproved unknown-snapshot", errors
+        )
+        self.assertIn(
+            "snapshots[1].project: expected non-empty string", errors
+        )
+        self.assertIn(
+            "snapshots[2].materialized_file_count: expected nonnegative integer",
+            errors,
+        )
+        self.assertIn("snapshots[3].excluded.paths: duplicate path", errors)
+        self.assertIn(
+            "snapshots[3].excluded.paths: expected relative POSIX path ../escape",
+            errors,
+        )
+        self.assertTrue(
+            any(
+                error.startswith("registry.snapshots: expected approved IDs")
+                for error in errors
+            )
+        )
+
     def test_registry_validation_is_total_for_malformed_roots_and_rows(self):
         cases = [None, [], "registry", 1, True]
         for value in cases:
@@ -345,8 +378,12 @@ class SourceIndexContractTests(unittest.TestCase):
             data["files"][0]["line_count"] = None
 
         binary_errors = self.errors_after(binary_owner)
-        self.assertIn("index.symbols[0].path: binary owner has no line count", binary_errors)
-        self.assertIn("index.configs[0].path: binary owner has no line count", binary_errors)
+        self.assertIn(
+            "index.symbols[0].line: exceeds file line_count", binary_errors
+        )
+        self.assertIn(
+            "index.configs[0].line: exceeds file line_count", binary_errors
+        )
 
     def test_sort_and_duplicate_rules(self):
         def unsorted_files(data):
