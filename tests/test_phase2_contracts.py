@@ -689,6 +689,116 @@ class TargetCoverageTest(unittest.TestCase):
             ),
         )
 
+    def test_coverage_programmatic_non_mapping_rows_return_stable_errors(self):
+        index = {"files": [{"path": "pkg.py"}]}
+        for malformed in (None, [], "row", 1, True):
+            with self.subTest(malformed=malformed):
+                errors = contracts.validate_target_coverage(
+                    index, [malformed], evidence={}
+                )
+                self.assertIn("coverage[0]: expected object", errors)
+
+    def test_coverage_short_csv_and_header_errors_are_total_and_stable(self):
+        index = {"files": [{"path": "pkg.py"}]}
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "coverage.csv"
+            path.write_text(
+                "path,disposition,page,section,evidence_ids,reason\n"
+                "pkg.py,mapped\n",
+                encoding="utf-8",
+            )
+            errors = contracts.validate_target_coverage(
+                index, path, evidence={}
+            )
+            for field in ("page", "section", "evidence_ids", "reason"):
+                self.assertIn(
+                    f"coverage[0] pkg.py.{field}: expected string", errors
+                )
+            self.assertIn(
+                "coverage[0] pkg.py: page and section required", errors
+            )
+
+            path.write_text(
+                "path,disposition\npkg.py,mapped\n", encoding="utf-8"
+            )
+            self.assertIn(
+                "target coverage: expected header "
+                "path,disposition,page,section,evidence_ids,reason",
+                contracts.validate_target_coverage(
+                    index, path, evidence={}
+                ),
+            )
+
+    def test_page_catalog_malformed_matrix_is_total_and_aggregates(self):
+        index = {"files": [{"path": "pkg.py"}]}
+        rows = [
+            {
+                "path": "pkg.py",
+                "disposition": "mapped",
+                "page": "page.html",
+                "section": "sec",
+                "evidence_ids": "",
+                "reason": "",
+            }
+        ]
+        cases = [
+            ({}, "page_catalog: expected array"),
+            ("catalog", "page_catalog: expected array"),
+            (1, "page_catalog: expected array"),
+            (True, "page_catalog: expected array"),
+            ([None], "page_catalog[0]: expected object"),
+            (
+                [{"sections": []}],
+                "page_catalog[0]: missing field slug",
+            ),
+            (
+                [{"slug": "page.html"}],
+                "page_catalog[0]: missing field sections",
+            ),
+            (
+                [{"slug": None, "sections": []}],
+                "page_catalog[0].slug: expected string",
+            ),
+            (
+                [{"slug": "page.html", "sections": None}],
+                "page_catalog[0].sections: expected array",
+            ),
+            (
+                [{"slug": "page.html", "sections": [None]}],
+                "page_catalog[0].sections[0]: expected object",
+            ),
+            (
+                [{"slug": "page.html", "sections": [{}]}],
+                "page_catalog[0].sections[0]: missing field id",
+            ),
+            (
+                [{"slug": "page.html", "sections": [{"id": None}]}],
+                "page_catalog[0].sections[0].id: expected string",
+            ),
+        ]
+        for malformed, expected in cases:
+            with self.subTest(expected=expected):
+                errors = contracts.validate_target_coverage(
+                    index, rows, evidence={}, page_catalog=malformed
+                )
+                self.assertIn(expected, errors)
+                self.assertIn(
+                    "coverage[0] pkg.py: missing section page.html#sec",
+                    errors,
+                )
+
+        self.assertEqual(
+            [],
+            contracts.validate_target_coverage(
+                index,
+                rows,
+                evidence={},
+                page_catalog=[
+                    {"slug": "page.html", "sections": [{"id": "sec"}]}
+                ],
+            ),
+        )
+
     def test_evidence_has_four_states_bounded_quotes_and_tuple_arrays(self):
         evidence = self.load_evidence()
         self.assertEqual(

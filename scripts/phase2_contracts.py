@@ -7,6 +7,7 @@ import csv
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cache, lru_cache
 from pathlib import Path
@@ -62,6 +63,14 @@ DECISION_REFS = {
 }
 EVIDENCE_STATES = {"verified", "project_claim", "inference", "pending_hardware"}
 DISPOSITIONS = {"mapped", "excluded", "pending"}
+COVERAGE_FIELDS = (
+    "path",
+    "disposition",
+    "page",
+    "section",
+    "evidence_ids",
+    "reason",
+)
 
 
 _APPROVED: dict[str, dict[str, Any]] = {
@@ -750,15 +759,50 @@ def validate_target_coverage(
 ) -> list[str]:
     if evidence is None:
         evidence = load_evidence(ROOT / "research/target-evidence.json")
+    errors: list[str] = []
     if isinstance(rows, Path):
         with rows.open(encoding="utf-8", newline="") as handle:
-            csv_rows = list(csv.DictReader(handle))
+            reader = csv.DictReader(handle)
+            csv_rows = list(reader)
+            if reader.fieldnames != list(COVERAGE_FIELDS):
+                errors.append(
+                    "target coverage: expected header "
+                    + ",".join(COVERAGE_FIELDS)
+                )
+    elif isinstance(rows, list):
+        csv_rows = rows
     else:
-        csv_rows = list(rows)
+        errors.append("target coverage: expected rows array")
+        csv_rows = []
 
-    errors: list[str] = []
+    normalized_rows: list[tuple[int, dict[str, str]]] = []
+    actual_paths: list[str] = []
+    for index_number, row in enumerate(csv_rows):
+        if not isinstance(row, Mapping):
+            errors.append(f"coverage[{index_number}]: expected object")
+            continue
+        path_value = row.get("path")
+        path = path_value if isinstance(path_value, str) else ""
+        prefix = f"coverage[{index_number}]"
+        if path:
+            prefix += f" {path}"
+        normalized: dict[str, str] = {}
+        for field in COVERAGE_FIELDS:
+            if field not in row:
+                normalized[field] = ""
+                continue
+            value = row.get(field)
+            if not isinstance(value, str):
+                errors.append(f"{prefix}.{field}: expected string")
+                normalized[field] = ""
+            else:
+                normalized[field] = value
+        normalized_rows.append((index_number, normalized))
+        if path:
+            actual_paths.append(path)
+
     expected = collections.Counter(row["path"] for row in index["files"])
-    actual = collections.Counter(row.get("path", "") for row in csv_rows)
+    actual = collections.Counter(actual_paths)
     for path in sorted((expected - actual).elements()):
         errors.append(f"target coverage: missing {path}")
     for path in sorted((actual - expected).elements()):
@@ -767,27 +811,64 @@ def validate_target_coverage(
     known = set(evidence)
     catalog = None
     if page_catalog is not None:
-        catalog = {
-            page["slug"]: {
-                section["id"] for section in page["sections"]
-            }
-            for page in page_catalog
-        }
-    for index_number, row in enumerate(csv_rows):
-        prefix = f"coverage[{index_number}] {row.get('path', '')}"
-        disposition = row.get("disposition", "")
-        page = row.get("page", "")
-        section = row.get("section", "")
+        catalog = {}
+        if not isinstance(page_catalog, list):
+            errors.append("page_catalog: expected array")
+        else:
+            for page_index, page_row in enumerate(page_catalog):
+                page_prefix = f"page_catalog[{page_index}]"
+                if not isinstance(page_row, Mapping):
+                    errors.append(f"{page_prefix}: expected object")
+                    continue
+                slug = page_row.get("slug")
+                if "slug" not in page_row:
+                    errors.append(f"{page_prefix}: missing field slug")
+                elif not isinstance(slug, str):
+                    errors.append(f"{page_prefix}.slug: expected string")
+                sections = page_row.get("sections")
+                if "sections" not in page_row:
+                    errors.append(f"{page_prefix}: missing field sections")
+                    continue
+                if not isinstance(sections, list):
+                    errors.append(f"{page_prefix}.sections: expected array")
+                    continue
+                valid_ids: set[str] = set()
+                for section_index, section_row in enumerate(sections):
+                    section_prefix = (
+                        f"{page_prefix}.sections[{section_index}]"
+                    )
+                    if not isinstance(section_row, Mapping):
+                        errors.append(f"{section_prefix}: expected object")
+                        continue
+                    section_id = section_row.get("id")
+                    if "id" not in section_row:
+                        errors.append(f"{section_prefix}: missing field id")
+                    elif not isinstance(section_id, str):
+                        errors.append(
+                            f"{section_prefix}.id: expected string"
+                        )
+                    else:
+                        valid_ids.add(section_id)
+                if isinstance(slug, str):
+                    catalog.setdefault(slug, set()).update(valid_ids)
+
+    for index_number, row in normalized_rows:
+        prefix = f"coverage[{index_number}]"
+        if row["path"]:
+            prefix += f" {row['path']}"
+        disposition = row["disposition"]
+        page = row["page"]
+        section = row["section"]
         if disposition not in DISPOSITIONS:
             errors.append(f"{prefix}: invalid disposition {disposition}")
         if disposition in {"mapped", "pending"} and (
             not page or not section
         ):
             errors.append(f"{prefix}: page and section required")
-        if disposition in {"excluded", "pending"} and not row.get("reason"):
+        if disposition in {"excluded", "pending"} and not row["reason"]:
             errors.append(f"{prefix}: reason required")
         for evidence_id in filter(
-            None, row.get("evidence_ids", "").split("|")
+            None, row["evidence_ids"].split("|")
         ):
             if evidence_id not in known:
                 errors.append(f"{prefix}: unknown evidence {evidence_id}")
