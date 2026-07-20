@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="把 Accelerate ownership、AdamW 更新、repo ID 与本地目录冲突、主进程 safetensors 导出及 resume 缺口分开陈述。">
+  <title>优化器、Checkpoint 与导出 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">优化器、Checkpoint 与导出</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a href="sft-training-loop.html">8 · SFT 训练循环</a></li><li><a class="active" aria-current="page" href="optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a href="coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-training / 9</p>
+        <h1>优化器、Checkpoint 与导出</h1>
+        <p class="lead">把 Accelerate ownership、AdamW 更新、repo ID 与本地目录冲突、主进程 safetensors 导出及 resume 缺口分开陈述。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>区分 Accelerate 的已核验调用与 process-local/wrapper 静态推断</li><li>解释默认 Hugging Face repo ID 与本地 copytree/config open 的静态冲突</li><li>按主进程导出顺序定位 config rewrite、speaker row 3000 与 safetensors 边界</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与训练循环</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="accelerate-ownership"><h2>Accelerate ownership：verified 与 pending 分开</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 已核验 ownership call：qwen3tts.model、optimizer、train_dataloader 一起进入 accelerator.prepare，并使用返回的 model、optimizer、train_dataloader。</p><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 静态推断 / pending execution：module global target_speaker_embedding 是每个 Python interpreter 的状态；实际 process-local 值、不同进程首先看到的 embedding、DataLoader runtime sharding、prepared wrapper 的 direct attributes/custom method 行为都依赖启动方式与 Accelerate 版本。源码不证明跨进程共享，也不证明必然失败。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">职责</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>Accelerate、AdamW 与导出</td><td>finetuning/sft_12hz.py</td><td>L30–L158</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-001">证据 TGT-TRAIN-001</a></li><li><a href="#evidence-TGT-TRAIN-003">证据 TGT-TRAIN-003</a></li><li><a href="#evidence-TGT-TRAIN-004">证据 TGT-TRAIN-004</a></li><li><a href="#evidence-TGT-TRAIN-006">证据 TGT-TRAIN-006</a></li><li><a href="#evidence-TGT-TRAIN-007">证据 TGT-TRAIN-007</a></li></ul></section>
+<section id="optimizer"><h2>AdamW 与同步步裁剪</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>构造优化器</strong><code>finetuning/sft_12hz.py</code><span>AdamW</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>同步步裁剪梯度</strong><code>finetuning/sft_12hz.py</code><span>accelerator.clip_grad_norm_</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>参数更新</strong><code>finetuning/sft_12hz.py</code><span>optimizer.step</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>清空梯度</strong><code>finetuning/sft_12hz.py</code><span>optimizer.zero_grad</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> AdamW 绑定 qwen3tts.model.parameters()，默认脚本 weight_decay=0.01；在 accelerator.backward 后，仅同步梯度步裁剪 norm=1.0，再 step/zero_grad。源码没有 scheduler step。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-005">证据 TGT-TRAIN-005</a></li></ul></section>
+<section id="repo-id-vs-local-path"><h2>HF repo ID 与本地导出路径冲突</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> --init_model_path 默认值是 Hugging Face repo ID Qwen/Qwen3-TTS-12Hz-1.7B-Base，这是已核验的 argparse 值。</p><p><span class="evidence-state" data-state="inference">状态：静态推断</span> export 随后对 MODEL_PATH 执行 shutil.copytree，并直接 open(MODEL_PATH/config.json)。因此默认 repo ID 与本地文件 API 静态冲突，实际导出静态上需要本地目录；是否由调用者显式传入本地目录属于执行前提，未在本研究运行。</p><ul class="source-refs"><li><a href="#evidence-TGT-EXPORT-002">证据 TGT-EXPORT-002</a></li><li><a href="#evidence-TGT-EXPORT-003">证据 TGT-EXPORT-003</a></li></ul></section>
+<section id="main-process-export"><h2>主进程导出顺序</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>主进程门控</strong><code>finetuning/sft_12hz.py</code><span>accelerator.is_main_process</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>复制本地模型目录</strong><code>finetuning/sft_12hz.py</code><span>shutil.copytree</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>读取并改写 config.json</strong><code>finetuning/sft_12hz.py</code><span>json.load / json.dump</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>解包模型</strong><code>finetuning/sft_12hz.py</code><span>accelerator.unwrap_model</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>状态移到 CPU</strong><code>finetuning/sft_12hz.py</code><span>unwrapped_model.state_dict</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>移除 speaker encoder</strong><code>finetuning/sft_12hz.py</code><span>del state_dict[speaker_encoder*]</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>注入 speaker row 3000</strong><code>finetuning/sft_12hz.py</code><span>codec_embedding.weight[3000] = target_speaker_embedding[0]</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>写 safetensors</strong><code>finetuning/sft_12hz.py</code><span>save_file</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> epoch 结束后只有 accelerator.is_main_process 分支执行目录复制、config rewrite、unwrap、CPU state_dict 处理和 model.safetensors 写入；固定证据是 line 126 的门控与 lines 147–158 的权重导出。</p><ul class="source-refs"><li><a href="#evidence-TGT-EXPORT-001">证据 TGT-EXPORT-001</a></li></ul></section>
+<section id="custom-speaker"><h2>CustomVoice config 与 speaker embedding</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 导出把 tts_model_type 改为 custom_voice，为 args.speaker_name 写 spk_id=3000 与 spk_is_dialect=false；state_dict 中 drop speaker encoder，随后把 target_speaker_embedding[0] 注入 talker.model.codec_embedding.weight 的 speaker row 3000，最后保存 safetensors。</p><ul class="source-refs"><li><a href="#evidence-TGT-EXPORT-001">证据 TGT-EXPORT-001</a></li></ul></section>
+<section id="checkpoint-gap"><h2>Checkpoint / resume 缺口</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 这个 epoch 产物是供 CustomVoice 装载的模型目录与 model.safetensors；safetensors 不等于 optimizer/RNG resume。固定脚本没有保存 optimizer state、scheduler state、RNG、sampler position 或 Accelerator training state，也没有 resume/load_state 路径。该结论是 fixed-tree audit inference，不证明仓库外其他系统不存在。</p><ul class="source-refs"><li><a href="#evidence-TGT-GAP-001">证据 TGT-GAP-001</a></li></ul></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="sft-training-loop.html">← 上一页：SFT 训练循环</a><a rel="next" href="coverage-gaps.html">下一页：目标覆盖矩阵与验证缺口 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#accelerate-ownership">Accelerate ownership：verified 与 pending 分开</a><a data-rail-content href="#optimizer">AdamW 与同步步裁剪</a><a data-rail-content href="#repo-id-vs-local-path">HF repo ID 与本地导出路径冲突</a><a data-rail-content href="#main-process-export">主进程导出顺序</a><a data-rail-content href="#custom-speaker">CustomVoice config 与 speaker embedding</a><a data-rail-content href="#checkpoint-gap">Checkpoint / resume 缺口</a></section><section id="evidence-TGT-TRAIN-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>code passes model, optimizer and DataLoader to `accelerator.prepare`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L62-L64">固定源码 finetuning/sft_12hz.py · L62–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-003" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-003</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>module global implies per-interpreter state; actual per-process behavior depends on launch/runtime</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L30-L30">固定源码 finetuning/sft_12hz.py · L30–L30 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-004" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-004</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>under multi-process launch each process may retain the first embedding it sees; execution is pending</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L83-L84">固定源码 finetuning/sft_12hz.py · L83–L84 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-006" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-006</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>DataLoader sharding is delegated to Accelerate runtime after `prepare`; exact wrapper/version behavior is pending execution</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L58-L64">固定源码 finetuning/sft_12hz.py · L58–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-007" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-007</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>direct access to custom attributes/methods through the prepared model is wrapper/version-sensitive and pending multi-process execution</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L82-L111">固定源码 finetuning/sft_12hz.py · L82–L111 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-005" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-005</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>exact loss is `outputs.loss + 0.3 * sub_talker_loss`, then backward, clip and optimizer step</p>
+<p data-rail-content>摘录：outputs.loss + 0.3 * sub_talker_loss</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L100-L121">固定源码 finetuning/sft_12hz.py · L100–L121 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-EXPORT-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-EXPORT-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>default initialization value is a Hugging Face repo ID</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L35-L35">固定源码 finetuning/sft_12hz.py · L35–L35 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-EXPORT-003" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-EXPORT-003</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>export uses `copytree` and directly opens `MODEL_PATH/config.json`, so actual export statically requires a local directory despite the default repo ID</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L126-L132">固定源码 finetuning/sft_12hz.py · L126–L132 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-EXPORT-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-EXPORT-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>per-epoch copy/config mutation, speaker row 3000 and safetensors export</p>
+<p data-rail-content>摘录：checkpoint-epoch-{epoch}</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L126-L158">固定源码 finetuning/sft_12hz.py · L126–L158 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-GAP-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-GAP-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>absence of scheduler/resume/validation in this file is a fixed-tree audit inference, not proof of global absence</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L31-L158">固定源码 finetuning/sft_12hz.py · L31–L158 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>

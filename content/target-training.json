@@ -1,0 +1,661 @@
+{
+  "schema_version": 1,
+  "pages": [
+    {
+      "slug": "target/sft-data-collate.html",
+      "title": "SFT 数据预处理与 Collate",
+      "summary": "沿官方 12Hz Base 单说话人配方，拆解原始 JSONL、离线 codec materialization、Dataset item 与双轨 collate 张量。",
+      "order": 7,
+      "group": "target-training",
+      "objectives": [
+        "区分原始 JSONL 与离线加入 audio_codes 后的训练 JSONL",
+        "按固定源码解释 text ids、参考 mel、双轨输入、masks 与 codec-0 labels",
+        "识别 CUDA 预处理默认值、bucketing 缺口与运行时 sharding 边界"
+      ],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "public-recipe",
+          "title": "公开配方范围",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "finetuning/README.md 公开的是 Qwen3-TTS 12Hz Base 1.7B/0.6B 的 single-speaker SFT；multi-speaker 与其他 advanced fine-tuning 被列为未来工作。本页不把公开范围扩写成 VoiceDesign、多说话人或完整预训练配方。",
+              "state": "verified",
+              "evidence_ids": ["TGT-SCOPE-001"]
+            },
+            {
+              "type": "table",
+              "headers": ["职责", "源码路径", "固定范围"],
+              "rows": [
+                ["公开 SFT 范围与命令", "finetuning/README.md", "L3–L10, L12–L63"],
+                ["离线 codec 物化", "finetuning/prepare_data.py", "L24–L68"],
+                ["Dataset 与 collate", "finetuning/dataset.py", "L33–L217"]
+              ]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-SCOPE-001"]}
+          ]
+        },
+        {
+          "id": "jsonl-contract",
+          "title": "JSONL 字段契约",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "公开 README 的原始行提供 audio/text/ref_audio；prepare_data.py 保留原字典字段并加入 audio_codes，写成新的 JSONL。audio 指向训练目标音频，text 是转写，ref_audio 是参考说话人音频；audio_codes 不是 Dataset 在线生成，而是离线阶段物化。简写契约：audio/text/ref_audio → audio/text/ref_audio/audio_codes。",
+              "state": "verified",
+              "evidence_ids": ["TGT-DATA-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-DATA-001"]}
+          ]
+        },
+        {
+          "id": "preprocess-device",
+          "title": "预处理设备默认值",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "prepare_data 的 argparse 目标默认值是 default=\"cuda:0\"，并把 args.device 原样传给 tokenizer 的 device_map=args.device。这只是官方预处理脚本的 target default，不表示自动设备选择，也不构成 NPU 映射。",
+              "state": "verified",
+              "evidence_ids": ["TGT-DATA-003"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-DATA-003"]}
+          ]
+        },
+        {
+          "id": "offline-codes",
+          "title": "离线 audio_codes 数据流",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "预处理入口", "path": "finetuning/prepare_data.py", "symbol": "prepare_data.main", "evidence_ids": ["TGT-DATA-001"]},
+                {"label": "批量编码", "path": "finetuning/prepare_data.py", "symbol": "tokenizer_12hz.encode", "evidence_ids": ["TGT-DATA-001"]},
+                {"label": "移回 CPU 并转列表", "path": "finetuning/prepare_data.py", "symbol": "code.cpu().tolist", "evidence_ids": ["TGT-DATA-001"]},
+                {"label": "写入带 audio_codes 的 JSONL", "path": "finetuning/prepare_data.py", "symbol": "json.dumps / f.writelines", "evidence_ids": ["TGT-DATA-001"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "真实 offline flow 是读取全部 JSONL 行、以最多 32 条音频组成 batch、调用 tokenizer.encode、逐条执行 code.cpu().tolist 写回字典，最后序列化并写出 JSONL。最后不足 32 条的 batch 走同一 encode/materialize 路径。",
+              "state": "verified",
+              "evidence_ids": ["TGT-DATA-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-DATA-001"]}
+          ]
+        },
+        {
+          "id": "dataset-item",
+          "title": "Dataset item：文本、codec 与参考 mel",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "读取样本", "path": "finetuning/dataset.py", "symbol": "TTSDataset.__getitem__", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "构造 assistant 文本", "path": "finetuning/dataset.py", "symbol": "TTSDataset._build_assistant_text", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "生成 text ids", "path": "finetuning/dataset.py", "symbol": "TTSDataset._tokenize_texts", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "规范化参考音频", "path": "finetuning/dataset.py", "symbol": "TTSDataset._normalize_audio_inputs", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "提取参考 mel", "path": "finetuning/dataset.py", "symbol": "TTSDataset.extract_mels", "evidence_ids": ["TGT-DATA-002"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "__getitem__ 把 text 包成 assistant ChatML，再经 processor 得到 text_ids 并去掉最后 5 个 token；audio_codes 转为 long tensor，固定源码注释和后续分配给出 (T,16)；ref_audio 必须解码为 24kHz，mel_spectrogram 使用 128-bin mel，并返回 text_ids、audio_codes、ref_mel。",
+              "state": "verified",
+              "evidence_ids": ["TGT-DATA-002"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-DATA-002"]}
+          ]
+        },
+        {
+          "id": "collate-contract",
+          "title": "Collate：双轨输入、masks 与 labels",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "batch 入口", "path": "finetuning/dataset.py", "symbol": "TTSDataset.collate_fn", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "双轨输入与 codec 张量", "path": "finetuning/dataset.py", "symbol": "input_ids / codec_ids", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "构造 embedding 与 attention masks", "path": "finetuning/dataset.py", "symbol": "text_embedding_mask / codec_embedding_mask / codec_mask / attention_mask", "evidence_ids": ["TGT-DATA-002"]},
+                {"label": "构造 codec-0 labels", "path": "finetuning/dataset.py", "symbol": "codec_0_labels", "evidence_ids": ["TGT-DATA-002"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "TTSDataset.collate_fn 分配双轨 input_ids=(B,T,2) 与 codec_ids=(B,T,16)。轨 0 放 text/control/pad，轨 1 放 codec control、speaker slot 与 codec-0；text_embedding_mask、codec_embedding_mask、codec_mask、attention_mask 控制各段，codec-0 labels 只在音频 codec-0 与 EOS 位置监督，其余为 -100。ref_mels 直接沿 batch 维拼接。",
+              "state": "verified",
+              "evidence_ids": ["TGT-DATA-002"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-DATA-002"]}
+          ]
+        },
+        {
+          "id": "data-boundary",
+          "title": "数据边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "固定脚本以 shuffle=True 构造普通 DataLoader，但本页不作 bucketing 声明。DataLoader 之后会交给 accelerator.prepare，因此 sharding 属于 Accelerate runtime 讨论；不能由 Dataset 文件静态推断多进程切分结果。",
+              "state": "inference",
+              "evidence_ids": ["TGT-DATA-002", "TGT-TRAIN-001", "TGT-TRAIN-006"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "target/sft-training-loop.html",
+      "title": "SFT 训练循环",
+      "summary": "按固定 sft_12hz.py 的真实顺序讲解 BF16+FA2 默认、Accelerate ownership、embedding 汇总、Talker/MTP 损失与 AdamW 更新。",
+      "order": 8,
+      "group": "target-training",
+      "objectives": [
+        "按源码顺序定位模型、配置、数据、优化器与 accelerator.prepare",
+        "区分 prepared model 的已核验调用点与 wrapper/multi-process 待执行行为",
+        "解释主 Talker 与 residual code predictor 的组合损失和更新顺序"
+      ],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "target-precision-defaults",
+          "title": "目标训练精度默认",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "官方 target 脚本用 Accelerator(mixed_precision=\"bf16\")，并以 torch.bfloat16 与 flash_attention_2 装载模型；BF16+FA2 是目标默认，不是 Ascend 兼容性结论，也没有在本研究环境运行。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-000"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-000"]}
+          ]
+        },
+        {
+          "id": "setup",
+          "title": "Setup 与 prepare ownership",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "装载模型", "path": "finetuning/sft_12hz.py", "symbol": "Qwen3TTSModel.from_pretrained", "evidence_ids": ["TGT-TRAIN-000"]},
+                {"label": "装载配置", "path": "finetuning/sft_12hz.py", "symbol": "AutoConfig.from_pretrained", "evidence_ids": ["TGT-TRAIN-001"]},
+                {"label": "构造数据集", "path": "finetuning/sft_12hz.py", "symbol": "TTSDataset", "evidence_ids": ["TGT-TRAIN-001"]},
+                {"label": "构造 DataLoader", "path": "finetuning/sft_12hz.py", "symbol": "DataLoader", "evidence_ids": ["TGT-TRAIN-001"]},
+                {"label": "构造优化器", "path": "finetuning/sft_12hz.py", "symbol": "AdamW", "evidence_ids": ["TGT-TRAIN-001", "TGT-TRAIN-005"]},
+                {"label": "交给 Accelerate", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.prepare", "evidence_ids": ["TGT-TRAIN-001"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "脚本先构造 model/config/dataset/dataloader/AdamW，再把 qwen3tts.model、optimizer、train_dataloader 一起交给 accelerator.prepare，并以后者返回的 model/optimizer/DataLoader 继续训练。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-001"]
+            },
+            {
+              "type": "table",
+              "headers": ["职责", "源码路径", "固定范围"],
+              "rows": [
+                ["训练 setup、forward、update、export", "finetuning/sft_12hz.py", "L30–L158"],
+                ["训练 batch 合成", "finetuning/dataset.py", "L120–L217"],
+                ["残差码本训练 helper", "qwen_tts/core/models/modeling_qwen3_tts.py", "L1197–L1260, L1612–L1633"]
+              ]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-001"]}
+          ]
+        },
+        {
+          "id": "prepared-model-access",
+          "title": "Prepared model 的直接属性访问",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "已核验的静态 call site：accelerator.prepare 返回的变量 model 随后直接访问 model.speaker_encoder、model.talker.model.text_embedding、model.talker.code_predictor，并调用 model.talker.forward_sub_talker_finetune。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-002"]
+            },
+            {
+              "type": "paragraph",
+              "text": "这些 direct attributes/custom method 在具体 Accelerate wrapper/version 下是否透明，以及 wrapper/version/multi-process behavior，属于 inference / pending execution；静态源码既不能断言失败，也不能证明所有版本与启动模式均成功。",
+              "state": "inference",
+              "evidence_ids": ["TGT-TRAIN-007"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-002", "TGT-TRAIN-007"]}
+          ]
+        },
+        {
+          "id": "dataloader-sharding",
+          "title": "DataLoader sharding 边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "DataLoader sharding 交给 Accelerate runtime：脚本把 train_dataloader 传入 accelerator.prepare，并遍历返回对象。具体 Accelerate 版本、launch 模式、进程数与 wrapper 决定实际切分；行为 pending execution，不能用“源码未显式构造 DistributedSampler”推断不分布式。",
+              "state": "inference",
+              "evidence_ids": ["TGT-TRAIN-006"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-006"]}
+          ]
+        },
+        {
+          "id": "embedding-flow",
+          "title": "Speaker、文本与 codec embedding 数据流",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "参考 mel 编码", "path": "finetuning/sft_12hz.py", "symbol": "model.speaker_encoder", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "文本 embedding", "path": "finetuning/sft_12hz.py", "symbol": "model.talker.model.text_embedding", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "codec-0 embedding", "path": "finetuning/sft_12hz.py", "symbol": "model.talker.model.codec_embedding", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "写入 speaker slot", "path": "finetuning/sft_12hz.py", "symbol": "input_codec_embedding[:, 6, :] = speaker_embedding", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "合成 text+codec-0", "path": "finetuning/sft_12hz.py", "symbol": "input_embeddings = input_text_embedding + input_codec_embedding", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "读取残差 codec embedding", "path": "finetuning/sft_12hz.py", "symbol": "model.talker.code_predictor.get_input_embeddings", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "应用 codec mask", "path": "finetuning/sft_12hz.py", "symbol": "codec_i_embedding * codec_mask.unsqueeze(-1)", "evidence_ids": ["TGT-TRAIN-002"]},
+                {"label": "逐项加入残差 embedding", "path": "finetuning/sft_12hz.py", "symbol": "input_embeddings = input_embeddings + codec_i_embedding", "evidence_ids": ["TGT-TRAIN-002"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "ref_mels 经 speaker_encoder 得 embedding 并 detach；文本与 codec-0 embedding 各乘对应 mask，speaker embedding 写入 codec 轨第 6 位；随后循环 1..15 加入 residual codec embeddings，合成 input_embeddings。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-002"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-002"]}
+          ]
+        },
+        {
+          "id": "main-forward",
+          "title": "Talker 主前向与 codec-0 loss",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "Talker 主前向", "path": "finetuning/sft_12hz.py", "symbol": "model.talker", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "主损失", "path": "finetuning/sft_12hz.py", "symbol": "outputs.loss", "evidence_ids": ["TGT-TRAIN-005"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "model.talker 接收错一位的 inputs_embeds、attention_mask 与 codec_0_labels，并请求 hidden states；outputs.loss 是 codec-0 主损失。TGT-MODEL-004 只用于连接后续 residual helper，不把主 Talker 前向误写成 forward_sub_talker_finetune。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-005", "TGT-MODEL-004"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-005", "TGT-MODEL-004"]}
+          ]
+        },
+        {
+          "id": "sub-talker",
+          "title": "Residual code predictor loss",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "筛选 Talker hidden states 与 codec ids", "path": "finetuning/sft_12hz.py", "symbol": "hidden_states[codec_mask[:, :-1]] / codec_ids[codec_mask]", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "残差码本训练 helper", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "model.talker.forward_sub_talker_finetune", "evidence_ids": ["TGT-TRAIN-005", "TGT-MODEL-004"]},
+                {"label": "code predictor 前向", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "code_predictor.forward_finetune", "evidence_ids": ["TGT-MODEL-004"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "训练脚本先用 codec_mask 筛选 Talker hidden states 与完整 codec ids；forward_sub_talker_finetune 断言 shape，组合 hidden state 与前序 code embeddings，再真实调用 code_predictor.forward_finetune(labels=codec_ids[:,1:]) 返回 sub_talker_loss。",
+              "state": "verified",
+              "evidence_ids": ["TGT-MODEL-004", "TGT-TRAIN-005"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-MODEL-004", "TGT-TRAIN-005"]}
+          ]
+        },
+        {
+          "id": "training-loop",
+          "title": "组合损失、反向、裁剪与 AdamW",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "组合损失", "path": "finetuning/sft_12hz.py", "symbol": "outputs.loss + 0.3 * sub_talker_loss", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "反向传播", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.backward", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "同步步裁剪梯度", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.clip_grad_norm_", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "参数更新", "path": "finetuning/sft_12hz.py", "symbol": "optimizer.step", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "清空梯度", "path": "finetuning/sft_12hz.py", "symbol": "optimizer.zero_grad", "evidence_ids": ["TGT-TRAIN-005"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "每个 accumulate block 中，固定顺序是 outputs.loss + 0.3 * sub_talker_loss → accelerator.backward → 仅 sync_gradients 时 clip_grad_norm_(...,1.0) → AdamW.step → zero_grad。这里记录实际源码序列，不补写 scheduler。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-005"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-005"]}
+          ]
+        },
+        {
+          "id": "training-boundary",
+          "title": "训练生命周期边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "这个 fixed file 中没有 scheduler、validation 或 resume 流程；这是固定树审计边界，不证明其他版本或外部框架全局不存在。日志 print 与每 epoch export 也不是 loss 收敛、训练成功、质量达标或多进程正确性的证据。",
+              "state": "inference",
+              "evidence_ids": ["TGT-GAP-001"]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "target/optimizer-checkpoint-export.html",
+      "title": "优化器、Checkpoint 与导出",
+      "summary": "把 Accelerate ownership、AdamW 更新、repo ID 与本地目录冲突、主进程 safetensors 导出及 resume 缺口分开陈述。",
+      "order": 9,
+      "group": "target-training",
+      "objectives": [
+        "区分 Accelerate 的已核验调用与 process-local/wrapper 静态推断",
+        "解释默认 Hugging Face repo ID 与本地 copytree/config open 的静态冲突",
+        "按主进程导出顺序定位 config rewrite、speaker row 3000 与 safetensors 边界"
+      ],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "accelerate-ownership",
+          "title": "Accelerate ownership：verified 与 pending 分开",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "已核验 ownership call：qwen3tts.model、optimizer、train_dataloader 一起进入 accelerator.prepare，并使用返回的 model、optimizer、train_dataloader。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-001"]
+            },
+            {
+              "type": "paragraph",
+              "text": "静态推断 / pending execution：module global target_speaker_embedding 是每个 Python interpreter 的状态；实际 process-local 值、不同进程首先看到的 embedding、DataLoader runtime sharding、prepared wrapper 的 direct attributes/custom method 行为都依赖启动方式与 Accelerate 版本。源码不证明跨进程共享，也不证明必然失败。",
+              "state": "inference",
+              "evidence_ids": ["TGT-TRAIN-003", "TGT-TRAIN-004", "TGT-TRAIN-006", "TGT-TRAIN-007"]
+            },
+            {
+              "type": "table",
+              "headers": ["职责", "源码路径", "固定范围"],
+              "rows": [
+                ["Accelerate、AdamW 与导出", "finetuning/sft_12hz.py", "L30–L158"]
+              ]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-001", "TGT-TRAIN-003", "TGT-TRAIN-004", "TGT-TRAIN-006", "TGT-TRAIN-007"]}
+          ]
+        },
+        {
+          "id": "optimizer",
+          "title": "AdamW 与同步步裁剪",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "构造优化器", "path": "finetuning/sft_12hz.py", "symbol": "AdamW", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "同步步裁剪梯度", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.clip_grad_norm_", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "参数更新", "path": "finetuning/sft_12hz.py", "symbol": "optimizer.step", "evidence_ids": ["TGT-TRAIN-005"]},
+                {"label": "清空梯度", "path": "finetuning/sft_12hz.py", "symbol": "optimizer.zero_grad", "evidence_ids": ["TGT-TRAIN-005"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "AdamW 绑定 qwen3tts.model.parameters()，默认脚本 weight_decay=0.01；在 accelerator.backward 后，仅同步梯度步裁剪 norm=1.0，再 step/zero_grad。源码没有 scheduler step。",
+              "state": "verified",
+              "evidence_ids": ["TGT-TRAIN-005"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-TRAIN-005"]}
+          ]
+        },
+        {
+          "id": "repo-id-vs-local-path",
+          "title": "HF repo ID 与本地导出路径冲突",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "--init_model_path 默认值是 Hugging Face repo ID Qwen/Qwen3-TTS-12Hz-1.7B-Base，这是已核验的 argparse 值。",
+              "state": "verified",
+              "evidence_ids": ["TGT-EXPORT-002"]
+            },
+            {
+              "type": "paragraph",
+              "text": "export 随后对 MODEL_PATH 执行 shutil.copytree，并直接 open(MODEL_PATH/config.json)。因此默认 repo ID 与本地文件 API 静态冲突，实际导出静态上需要本地目录；是否由调用者显式传入本地目录属于执行前提，未在本研究运行。",
+              "state": "inference",
+              "evidence_ids": ["TGT-EXPORT-003"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-EXPORT-002", "TGT-EXPORT-003"]}
+          ]
+        },
+        {
+          "id": "main-process-export",
+          "title": "主进程导出顺序",
+          "blocks": [
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "主进程门控", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.is_main_process", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "复制本地模型目录", "path": "finetuning/sft_12hz.py", "symbol": "shutil.copytree", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "读取并改写 config.json", "path": "finetuning/sft_12hz.py", "symbol": "json.load / json.dump", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "解包模型", "path": "finetuning/sft_12hz.py", "symbol": "accelerator.unwrap_model", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "状态移到 CPU", "path": "finetuning/sft_12hz.py", "symbol": "unwrapped_model.state_dict", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "移除 speaker encoder", "path": "finetuning/sft_12hz.py", "symbol": "del state_dict[speaker_encoder*]", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "注入 speaker row 3000", "path": "finetuning/sft_12hz.py", "symbol": "codec_embedding.weight[3000] = target_speaker_embedding[0]", "evidence_ids": ["TGT-EXPORT-001"]},
+                {"label": "写 safetensors", "path": "finetuning/sft_12hz.py", "symbol": "save_file", "evidence_ids": ["TGT-EXPORT-001"]}
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "epoch 结束后只有 accelerator.is_main_process 分支执行目录复制、config rewrite、unwrap、CPU state_dict 处理和 model.safetensors 写入；固定证据是 line 126 的门控与 lines 147–158 的权重导出。",
+              "state": "verified",
+              "evidence_ids": ["TGT-EXPORT-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-EXPORT-001"]}
+          ]
+        },
+        {
+          "id": "custom-speaker",
+          "title": "CustomVoice config 与 speaker embedding",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "导出把 tts_model_type 改为 custom_voice，为 args.speaker_name 写 spk_id=3000 与 spk_is_dialect=false；state_dict 中 drop speaker encoder，随后把 target_speaker_embedding[0] 注入 talker.model.codec_embedding.weight 的 speaker row 3000，最后保存 safetensors。",
+              "state": "verified",
+              "evidence_ids": ["TGT-EXPORT-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-EXPORT-001"]}
+          ]
+        },
+        {
+          "id": "checkpoint-gap",
+          "title": "Checkpoint / resume 缺口",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "这个 epoch 产物是供 CustomVoice 装载的模型目录与 model.safetensors；safetensors 不等于 optimizer/RNG resume。固定脚本没有保存 optimizer state、scheduler state、RNG、sampler position 或 Accelerator training state，也没有 resume/load_state 路径。该结论是 fixed-tree audit inference，不证明仓库外其他系统不存在。",
+              "state": "inference",
+              "evidence_ids": ["TGT-GAP-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["TGT-GAP-001"]}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "target/coverage-gaps.html",
+      "title": "目标覆盖矩阵与验证缺口",
+      "summary": "逐行展示官方目标固定树的 35 项处置，把参考角色、环境车道、状态层次、未来验证与延期计划留在可审计边界内。",
+      "order": 10,
+      "group": "target-training",
+      "objectives": [
+        "核对 target-coverage.csv 的全部 35 行，不静默遗漏 mapped、pending 或 excluded 项",
+        "保持 MindSpeed-MM、MindSpeed-LLM 与 MOSS-TTS 的批准角色互不混合",
+        "区分文档覆盖、源码静态核验、项目声明与硬件待验证，并列出未来验证接口"
+      ],
+      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "sections": [
+        {
+          "id": "target-coverage",
+          "title": "35 行目标覆盖处置",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "文档覆盖完成只表示 research/target-coverage.csv 的 35 条 path disposition 全部在下表逐字段展示；源码静态核验只覆盖相应 fixed evidence，不等于运行成功。下面的链是审计/构建 provenance，非官方 Qwen3-TTS 调用链。下表同时保留 excluded、mapped 与 pending，不用页面取舍静默消除缺口。",
+              "state": "verified",
+              "evidence_ids": []
+            },
+            {
+              "type": "call_chain",
+              "items": [
+                {"label": "审计输入（非官方调用链）", "path": "research/target-coverage.csv", "symbol": "35 exact CSV rows", "evidence_ids": []},
+                {"label": "审计目录映射", "path": "content/target-training.json", "symbol": "target-coverage table", "evidence_ids": []},
+                {"label": "静态站构建", "path": "scripts/site_builder.py", "symbol": "_render_table", "evidence_ids": []},
+                {"label": "审计输出", "path": "site/target/coverage-gaps.html", "symbol": "35 data-coverage-path rows", "evidence_ids": []}
+              ]
+            },
+            {
+              "type": "table",
+              "headers": ["path", "disposition", "page", "section", "evidence_ids", "reason"],
+              "rows": [
+                [".github/ISSUE_TEMPLATE/bug_report.yml", "excluded", "", "", "", "Repository governance form; not runtime or training source"],
+                [".github/ISSUE_TEMPLATE/config.yml", "excluded", "", "", "", "Repository governance form; not runtime or training source"],
+                [".github/workflows/inactive.yaml", "excluded", "", "", "", "Repository maintenance workflow; not target execution flow"],
+                [".github/workflows/translate.yaml", "excluded", "", "", "", "Repository translation workflow; not target execution flow"],
+                [".gitignore", "excluded", "", "", "", "Repository hygiene only"],
+                ["LICENSE", "mapped", "index.html", "public-scope", "TGT-PKG-003", ""],
+                ["MANIFEST.in", "mapped", "target/package-inference-api.html", "package-layout", "TGT-PKG-004", ""],
+                ["README.md", "mapped", "index.html", "public-scope", "TGT-SCOPE-002", ""],
+                ["examples/test_model_12hz_base.py", "mapped", "target/package-inference-api.html", "base-api", "TGT-API-002", ""],
+                ["examples/test_model_12hz_custom_voice.py", "mapped", "target/package-inference-api.html", "custom-api", "TGT-API-003", ""],
+                ["examples/test_model_12hz_voice_design.py", "mapped", "target/package-inference-api.html", "voice-design-api", "TGT-API-003", ""],
+                ["examples/test_tokenizer_12hz.py", "mapped", "target/tokenizer-12hz.html", "encode-contract", "TGT-TOK12-001", ""],
+                ["finetuning/README.md", "mapped", "target/sft-data-collate.html", "public-recipe", "TGT-SCOPE-001", ""],
+                ["finetuning/dataset.py", "mapped", "target/sft-data-collate.html", "collate-contract", "TGT-DATA-002", ""],
+                ["finetuning/prepare_data.py", "mapped", "target/sft-data-collate.html", "offline-codes", "TGT-DATA-001", ""],
+                ["finetuning/sft_12hz.py", "mapped", "target/sft-training-loop.html", "training-loop", "TGT-TRAIN-005", ""],
+                ["pyproject.toml", "mapped", "target/package-inference-api.html", "package-layout", "TGT-PKG-001", ""],
+                ["qwen_tts/__init__.py", "mapped", "target/package-inference-api.html", "package-layout", "TGT-PKG-005", ""],
+                ["qwen_tts/__main__.py", "mapped", "target/package-inference-api.html", "package-layout", "TGT-PKG-006", ""],
+                ["qwen_tts/cli/demo.py", "mapped", "target/package-inference-api.html", "target-defaults", "TGT-CLI-001|TGT-CLI-002", ""],
+                ["qwen_tts/core/__init__.py", "mapped", "target/tokenizer-12hz.html", "package-tokenizer-registry", "TGT-PKG-002", ""],
+                ["qwen_tts/core/models/__init__.py", "mapped", "target/model-architecture.html", "composite-config", "TGT-CONFIG-001", ""],
+                ["qwen_tts/core/models/configuration_qwen3_tts.py", "mapped", "target/model-architecture.html", "composite-config", "TGT-CONFIG-001", ""],
+                ["qwen_tts/core/models/modeling_qwen3_tts.py", "mapped", "target/model-architecture.html", "talker", "TGT-MODEL-002", ""],
+                ["qwen_tts/core/models/processing_qwen3_tts.py", "mapped", "target/processor-contracts.html", "text-contract", "TGT-PROC-001", ""],
+                ["qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py", "mapped", "target/tokenizer-12hz.html", "configuration", "TGT-TOK12-002|TGT-TOK12-003", ""],
+                ["qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "mapped", "target/tokenizer-12hz.html", "encode-contract", "TGT-TOK12-001", ""],
+                ["qwen_tts/core/tokenizer_25hz/configuration_qwen3_tts_tokenizer_v1.py", "pending", "target/tokenizer-25hz.html", "asset-inventory", "TGT-TOK25-002", "25Hz public checkpoint and executable path remain unknown"],
+                ["qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "pending", "target/tokenizer-25hz.html", "dit-bigvgan", "TGT-TOK25-001", "Static dependencies and encode/decode wiring are verified but runtime assets and execution are unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz", "pending", "target/tokenizer-25hz.html", "bundled-filter", "TGT-TOK25-014", "Fixed binary URL and metadata only; binary body is never copied and execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "pending", "target/tokenizer-25hz.html", "vq-core", "TGT-TOK25-009|TGT-TOK25-010", "Direct VQ source is mapped; execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/speech_vq.py", "pending", "target/tokenizer-25hz.html", "speech-vq", "TGT-TOK25-004|TGT-TOK25-005", "Direct ONNX/SoX/Kaldi dependencies are mapped; execution remains unverified"],
+                ["qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py", "pending", "target/tokenizer-25hz.html", "whisper-encoder", "TGT-TOK25-006|TGT-TOK25-007", "Direct flash-attn dtype/manual fallback is mapped; execution remains unverified"],
+                ["qwen_tts/inference/qwen3_tts_model.py", "mapped", "target/package-inference-api.html", "load-chain", "TGT-API-001", ""],
+                ["qwen_tts/inference/qwen3_tts_tokenizer.py", "mapped", "target/processor-contracts.html", "audio-wrapper", "TGT-PROC-002", ""]
+              ]
+            },
+            {
+              "type": "table",
+              "headers": ["资料", "源码路径", "用途"],
+              "rows": [
+                ["35 行 coverage 台账", "research/target-coverage.csv", "逐字段页面来源"],
+                ["批准角色与环境车道", "research/reference-selection-proposal.md", "角色/边界来源"],
+                ["固定 revision 清单", "research/selected-revisions.csv", "参考身份来源"]
+              ]
+            }
+          ]
+        },
+        {
+          "id": "reference-roles",
+          "title": "三个批准参考角色保持分离",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "MindSpeed-MM 是 exact Qwen3-TTS 12Hz NPU speaker-SFT 的 main implementation anchor；它不自动补齐官方目标的完整生命周期，也不把项目自产结果变成本研究复现。",
+              "state": "inference",
+              "evidence_ids": ["PH1-ROLE-MM"]
+            },
+            {
+              "type": "paragraph",
+              "text": "MindSpeed-LLM 是 text-Qwen training-scale satellite，只提供规模工程学习材料；不能回填为 TTS/audio/16-codebook/speaker encoder 能力。",
+              "state": "inference",
+              "evidence_ids": ["PH1-ROLE-LLM"]
+            },
+            {
+              "type": "paragraph",
+              "text": "MOSS-TTS 是 speech/codec contrast satellite；它的 topology 与环境用于对照，不能归因成官方 Qwen3-TTS 或 upstream Ascend training。",
+              "state": "inference",
+              "evidence_ids": ["PH1-ROLE-MOSS"]
+            },
+            {"type": "source_refs", "evidence_ids": ["PH1-ROLE-MM", "PH1-ROLE-LLM", "PH1-ROLE-MOSS"]}
+          ]
+        },
+        {
+          "id": "environment-lanes",
+          "title": "两条环境车道与状态分层",
+          "blocks": [
+            {
+              "type": "table",
+              "headers": ["lane", "固定栈", "本研究状态", "允许结论"],
+              "rows": [
+                ["project-native", "PyTorch/torch-npu 2.7.1 + CANN 8.5.0", "文档/源码路线存在；本研究未运行或复现", "用于 source reading 与未来重放，不称 reproduced"],
+                ["target", "PyTorch/torch-npu 2.7.1 + CANN 8.5.2", "hardware pending", "exact compatibility unknown，待真机验证"]
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "CANN 8.5.2 兼容性：unknown。project-native 与 target 两条 lane 不能互相替代；8.5.0 文档路线不能外推 8.5.2，官方目标 pyproject 也没有 CANN/torch-npu compatibility evidence。",
+              "state": "pending_hardware",
+              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+            },
+            {
+              "type": "paragraph",
+              "text": "状态层次必须分开：文档覆盖完成是本页目录状态；源码静态核验是 fixed tree 事实；项目声明是候选方自报材料；硬件待验证覆盖 import、算子、数值、分布式、checkpoint、inference 与质量。任何上一层都不能替代下一层。",
+              "state": "project_claim",
+              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+            },
+            {"type": "source_refs", "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]}
+          ]
+        },
+        {
+          "id": "future-validation",
+          "title": "未来真机验证接口",
+          "blocks": [
+            {
+              "type": "table",
+              "headers": ["验证面", "未来证据"],
+              "rows": [
+                ["import/device", "CANN 8.5.2 import、device smoke 与依赖解析"],
+                ["operator/numerics", "RoPE、RMSNorm、attention/fallback 的 shape、dtype、forward/backward 与 tolerance"],
+                ["loss parity", "BF16/FP32 reduction 与组合 loss parity"],
+                ["audio/codec", "24kHz preprocessing、mel 与 codec materialization"],
+                ["checkpoint/inference", "save/load、HF export、转换后 inference 与 raw artifacts"],
+                ["8-card", "单机 8 卡 sampler/global batch/collective/checkpoint ownership"],
+                ["multi-node", "rendezvous、topology、throughput 与 fault restore"],
+                ["quality", "固定 eval pipeline、音质指标与 raw outputs"]
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "以上是 later-plan interfaces，不是本阶段实验结果；每项保持 unknown，直到产生可审计的目标硬件命令、环境、日志和产物。",
+              "state": "pending_hardware",
+              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+            }
+          ]
+        },
+        {
+          "id": "deferred-plans",
+          "title": "明确延期的后续工作",
+          "blocks": [
+            {
+              "type": "table",
+              "headers": ["deferred", "本页边界"],
+              "rows": [
+                ["full reference walkthroughs", "后续分别讲 MindSpeed-MM、MindSpeed-LLM 与 MOSS-TTS，不在本页合并成单一实现"],
+                ["migration mapping", "后续以核验矩阵描述 CUDA→NPU 变化；本页不是迁移方案"],
+                ["NPU execution", "后续按 target lane 真机运行；本页不执行硬件验证"]
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "本页不是迁移方案。本研究没有运行 CUDA、NPU、训练、推理或评测。页面只固化 official target source walkthrough、coverage disposition 与 later-plan interface，不产生 candidate source、硬件结果或兼容性结论。",
+              "state": "pending_hardware",
+              "evidence_ids": ["TGT-HW-001", "PH1-ENV-LANES"]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

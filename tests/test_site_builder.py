@@ -1,4 +1,5 @@
 import copy
+import csv
 import json
 import re
 import tempfile
@@ -26,6 +27,11 @@ ROOT = Path(__file__).resolve().parents[1]
 TARGET_CATALOGS = [
     ROOT / "content/site-foundation.json",
     ROOT / "content/target-architecture.json",
+]
+FULL_TARGET_CATALOGS = [
+    ROOT / "content/site-foundation.json",
+    ROOT / "content/target-architecture.json",
+    ROOT / "content/target-training.json",
 ]
 TARGET_FIXED_PREFIX = (
     "https://github.com/QwenLM/Qwen3-TTS/blob/"
@@ -168,6 +174,165 @@ TARGET_PAGE_CONTRACTS = {
         "boundary": "migration-boundary",
     },
 }
+TRAINING_PAGE_CONTRACTS = {
+    "target/sft-data-collate.html": {
+        "order": 7,
+        "title": "SFT 数据预处理与 Collate",
+        "sections": {
+            "public-recipe": {"TGT-SCOPE-001"},
+            "jsonl-contract": {"TGT-DATA-001"},
+            "preprocess-device": {"TGT-DATA-003"},
+            "offline-codes": {"TGT-DATA-001"},
+            "dataset-item": {"TGT-DATA-002"},
+            "collate-contract": {"TGT-DATA-002"},
+            "data-boundary": {"TGT-DATA-002", "TGT-TRAIN-001", "TGT-TRAIN-006"},
+        },
+        "chains": {
+            "offline-codes": [
+                ("预处理入口", "finetuning/prepare_data.py", "prepare_data.main"),
+                ("批量编码", "finetuning/prepare_data.py", "tokenizer_12hz.encode"),
+                ("移回 CPU 并转列表", "finetuning/prepare_data.py", "code.cpu().tolist"),
+                ("写入带 audio_codes 的 JSONL", "finetuning/prepare_data.py", "json.dumps / f.writelines"),
+            ],
+            "dataset-item": [
+                ("读取样本", "finetuning/dataset.py", "TTSDataset.__getitem__"),
+                ("构造 assistant 文本", "finetuning/dataset.py", "TTSDataset._build_assistant_text"),
+                ("生成 text ids", "finetuning/dataset.py", "TTSDataset._tokenize_texts"),
+                ("规范化参考音频", "finetuning/dataset.py", "TTSDataset._normalize_audio_inputs"),
+                ("提取参考 mel", "finetuning/dataset.py", "TTSDataset.extract_mels"),
+            ],
+            "collate-contract": [
+                ("batch 入口", "finetuning/dataset.py", "TTSDataset.collate_fn"),
+                ("双轨输入与 codec 张量", "finetuning/dataset.py", "input_ids / codec_ids"),
+                ("构造 embedding 与 attention masks", "finetuning/dataset.py", "text_embedding_mask / codec_embedding_mask / codec_mask / attention_mask"),
+                ("构造 codec-0 labels", "finetuning/dataset.py", "codec_0_labels"),
+            ],
+        },
+        "source_paths": {
+            "finetuning/README.md",
+            "finetuning/prepare_data.py",
+            "finetuning/dataset.py",
+        },
+        "boundary": "data-boundary",
+    },
+    "target/sft-training-loop.html": {
+        "order": 8,
+        "title": "SFT 训练循环",
+        "sections": {
+            "target-precision-defaults": {"TGT-TRAIN-000"},
+            "setup": {"TGT-TRAIN-000", "TGT-TRAIN-001", "TGT-TRAIN-005"},
+            "prepared-model-access": {"TGT-TRAIN-002", "TGT-TRAIN-007"},
+            "dataloader-sharding": {"TGT-TRAIN-006"},
+            "embedding-flow": {"TGT-TRAIN-002"},
+            "main-forward": {"TGT-MODEL-004", "TGT-TRAIN-005"},
+            "sub-talker": {"TGT-MODEL-004", "TGT-TRAIN-005"},
+            "training-loop": {"TGT-TRAIN-005"},
+            "training-boundary": {"TGT-GAP-001"},
+        },
+        "chains": {
+            "setup": [
+                ("装载模型", "finetuning/sft_12hz.py", "Qwen3TTSModel.from_pretrained"),
+                ("装载配置", "finetuning/sft_12hz.py", "AutoConfig.from_pretrained"),
+                ("构造数据集", "finetuning/sft_12hz.py", "TTSDataset"),
+                ("构造 DataLoader", "finetuning/sft_12hz.py", "DataLoader"),
+                ("构造优化器", "finetuning/sft_12hz.py", "AdamW"),
+                ("交给 Accelerate", "finetuning/sft_12hz.py", "accelerator.prepare"),
+            ],
+            "embedding-flow": [
+                ("参考 mel 编码", "finetuning/sft_12hz.py", "model.speaker_encoder"),
+                ("文本 embedding", "finetuning/sft_12hz.py", "model.talker.model.text_embedding"),
+                ("codec-0 embedding", "finetuning/sft_12hz.py", "model.talker.model.codec_embedding"),
+                ("写入 speaker slot", "finetuning/sft_12hz.py", "input_codec_embedding[:, 6, :] = speaker_embedding"),
+                ("合成 text+codec-0", "finetuning/sft_12hz.py", "input_embeddings = input_text_embedding + input_codec_embedding"),
+                ("读取残差 codec embedding", "finetuning/sft_12hz.py", "model.talker.code_predictor.get_input_embeddings"),
+                ("应用 codec mask", "finetuning/sft_12hz.py", "codec_i_embedding * codec_mask.unsqueeze(-1)"),
+                ("逐项加入残差 embedding", "finetuning/sft_12hz.py", "input_embeddings = input_embeddings + codec_i_embedding"),
+            ],
+            "main-forward": [
+                ("Talker 主前向", "finetuning/sft_12hz.py", "model.talker"),
+                ("主损失", "finetuning/sft_12hz.py", "outputs.loss"),
+            ],
+            "sub-talker": [
+                ("筛选 Talker hidden states 与 codec ids", "finetuning/sft_12hz.py", "hidden_states[codec_mask[:, :-1]] / codec_ids[codec_mask]"),
+                ("残差码本训练 helper", "qwen_tts/core/models/modeling_qwen3_tts.py", "model.talker.forward_sub_talker_finetune"),
+                ("code predictor 前向", "qwen_tts/core/models/modeling_qwen3_tts.py", "code_predictor.forward_finetune"),
+            ],
+            "training-loop": [
+                ("组合损失", "finetuning/sft_12hz.py", "outputs.loss + 0.3 * sub_talker_loss"),
+                ("反向传播", "finetuning/sft_12hz.py", "accelerator.backward"),
+                ("同步步裁剪梯度", "finetuning/sft_12hz.py", "accelerator.clip_grad_norm_"),
+                ("参数更新", "finetuning/sft_12hz.py", "optimizer.step"),
+                ("清空梯度", "finetuning/sft_12hz.py", "optimizer.zero_grad"),
+            ],
+        },
+        "source_paths": {
+            "finetuning/sft_12hz.py",
+            "finetuning/dataset.py",
+            "qwen_tts/core/models/modeling_qwen3_tts.py",
+        },
+        "boundary": "training-boundary",
+    },
+    "target/optimizer-checkpoint-export.html": {
+        "order": 9,
+        "title": "优化器、Checkpoint 与导出",
+        "sections": {
+            "accelerate-ownership": {
+                "TGT-TRAIN-001", "TGT-TRAIN-003", "TGT-TRAIN-004",
+                "TGT-TRAIN-006", "TGT-TRAIN-007",
+            },
+            "optimizer": {"TGT-TRAIN-005"},
+            "repo-id-vs-local-path": {"TGT-EXPORT-002", "TGT-EXPORT-003"},
+            "main-process-export": {"TGT-EXPORT-001"},
+            "custom-speaker": {"TGT-EXPORT-001"},
+            "checkpoint-gap": {"TGT-GAP-001"},
+        },
+        "chains": {
+            "optimizer": [
+                ("构造优化器", "finetuning/sft_12hz.py", "AdamW"),
+                ("同步步裁剪梯度", "finetuning/sft_12hz.py", "accelerator.clip_grad_norm_"),
+                ("参数更新", "finetuning/sft_12hz.py", "optimizer.step"),
+                ("清空梯度", "finetuning/sft_12hz.py", "optimizer.zero_grad"),
+            ],
+            "main-process-export": [
+                ("主进程门控", "finetuning/sft_12hz.py", "accelerator.is_main_process"),
+                ("复制本地模型目录", "finetuning/sft_12hz.py", "shutil.copytree"),
+                ("读取并改写 config.json", "finetuning/sft_12hz.py", "json.load / json.dump"),
+                ("解包模型", "finetuning/sft_12hz.py", "accelerator.unwrap_model"),
+                ("状态移到 CPU", "finetuning/sft_12hz.py", "unwrapped_model.state_dict"),
+                ("移除 speaker encoder", "finetuning/sft_12hz.py", "del state_dict[speaker_encoder*]"),
+                ("注入 speaker row 3000", "finetuning/sft_12hz.py", "codec_embedding.weight[3000] = target_speaker_embedding[0]"),
+                ("写 safetensors", "finetuning/sft_12hz.py", "save_file"),
+            ],
+        },
+        "source_paths": {"finetuning/sft_12hz.py"},
+        "boundary": "checkpoint-gap",
+    },
+    "target/coverage-gaps.html": {
+        "order": 10,
+        "title": "目标覆盖矩阵与验证缺口",
+        "sections": {
+            "target-coverage": set(),
+            "reference-roles": {"PH1-ROLE-MM", "PH1-ROLE-LLM", "PH1-ROLE-MOSS"},
+            "environment-lanes": {"PH1-ENV-LANES", "TGT-HW-001"},
+            "future-validation": {"PH1-ENV-LANES", "TGT-HW-001"},
+            "deferred-plans": {"PH1-ENV-LANES", "TGT-HW-001"},
+        },
+        "chains": {
+            "target-coverage": [
+                ("审计输入（非官方调用链）", "research/target-coverage.csv", "35 exact CSV rows"),
+                ("审计目录映射", "content/target-training.json", "target-coverage table"),
+                ("静态站构建", "scripts/site_builder.py", "_render_table"),
+                ("审计输出", "site/target/coverage-gaps.html", "35 data-coverage-path rows"),
+            ],
+        },
+        "source_paths": {
+            "research/target-coverage.csv",
+            "research/reference-selection-proposal.md",
+            "research/selected-revisions.csv",
+        },
+        "boundary": "deferred-plans",
+    },
+}
 
 
 def minimal_catalog(block=None, text="x"):
@@ -265,6 +430,458 @@ class LinkParser(HTMLParser):
 
 
 class SiteBuilderTest(unittest.TestCase):
+    def test_full_catalog_has_thirteen_pages_and_required_training_sections(self):
+        catalogs = [
+            ROOT / "content/site-foundation.json",
+            ROOT / "content/target-architecture.json",
+            ROOT / "content/target-training.json",
+        ]
+        pages = load_page_catalogs(catalogs)
+        self.assertEqual([page["order"] for page in pages], list(range(1, 14)))
+        serialized = json.dumps(pages, ensure_ascii=False)
+        for text in [
+            "finetuning/README.md",
+            "TTSDataset.collate_fn",
+            "outputs.loss + 0.3 * sub_talker_loss",
+            "accelerator.prepare",
+            "AdamW",
+            "speaker row 3000",
+            "CANN 8.5.2 兼容性：unknown",
+        ]:
+            self.assertIn(text, serialized)
+
+    def test_training_catalog_has_exact_page_section_evidence_and_flow_contracts(self):
+        pages = load_page_catalogs(FULL_TARGET_CATALOGS)
+        targets = [page for page in pages if page["group"] == "target-training"]
+        self.assertEqual(
+            [(page["order"], page["slug"], page["title"]) for page in targets],
+            [
+                (contract["order"], slug, contract["title"])
+                for slug, contract in TRAINING_PAGE_CONTRACTS.items()
+            ],
+        )
+
+        for page in targets:
+            with self.subTest(slug=page["slug"]):
+                contract = TRAINING_PAGE_CONTRACTS[page["slug"]]
+                sections = {
+                    section["id"]: section for section in page["sections"]
+                }
+                self.assertEqual(set(sections), set(contract["sections"]))
+                self.assertTrue(page["objectives"])
+                self.assertEqual(
+                    page["prerequisites"],
+                    ["熟悉 PyTorch 单卡张量与训练循环"],
+                )
+
+                for section_id, expected_evidence in contract["sections"].items():
+                    actual_evidence = set()
+                    for block in sections[section_id]["blocks"]:
+                        actual_evidence.update(block.get("evidence_ids", []))
+                        for item in block.get("items", []):
+                            actual_evidence.update(item.get("evidence_ids", []))
+                    self.assertEqual(
+                        actual_evidence,
+                        expected_evidence,
+                        f"{page['slug']}#{section_id}: "
+                        f"expected {expected_evidence}, got {actual_evidence}",
+                    )
+
+                for section_id, expected_chain in contract["chains"].items():
+                    chains = [
+                        block
+                        for block in sections[section_id]["blocks"]
+                        if block["type"] == "call_chain"
+                    ]
+                    self.assertEqual(len(chains), 1)
+                    self.assertEqual(
+                        [
+                            (item["label"], item["path"], item["symbol"])
+                            for item in chains[0]["items"]
+                        ],
+                        expected_chain,
+                    )
+
+                source_tables = [
+                    block
+                    for section in page["sections"]
+                    for block in section["blocks"]
+                    if block["type"] == "table"
+                    and "源码路径" in block["headers"]
+                    and block["rows"]
+                ]
+                self.assertTrue(source_tables)
+                actual_source_paths = {
+                    row[table["headers"].index("源码路径")]
+                    for table in source_tables
+                    for row in table["rows"]
+                }
+                self.assertTrue(
+                    contract["source_paths"] <= actual_source_paths,
+                    f"{page['slug']}: missing source paths "
+                    f"{contract['source_paths'] - actual_source_paths}",
+                )
+                self.assertTrue(sections[contract["boundary"]]["blocks"])
+
+    def test_training_facts_keep_verified_inference_and_pending_boundaries(self):
+        pages = {
+            page["slug"]: page for page in load_page_catalogs(FULL_TARGET_CATALOGS)
+        }
+
+        def section(slug, section_id):
+            return next(
+                item for item in pages[slug]["sections"]
+                if item["id"] == section_id
+            )
+
+        data_page = json.dumps(
+            pages["target/sft-data-collate.html"], ensure_ascii=False
+        )
+        for text in (
+            "12Hz Base",
+            "single-speaker",
+            "audio/text/ref_audio",
+            "audio_codes",
+            "cuda:0",
+            "device_map=args.device",
+            "(T,16)",
+            "24kHz",
+            "128-bin",
+            "(B,T,2)",
+            "codec-0 labels",
+            "不作 bucketing 声明",
+        ):
+            self.assertIn(text, data_page)
+        self.assertNotIn("prepare_data 会自动选择可用 GPU", data_page)
+        self.assertNotIn("dataset 内部执行在线 tokenizer.encode", data_page)
+
+        training_page = pages["target/sft-training-loop.html"]
+        training_json = json.dumps(training_page, ensure_ascii=False)
+        self.assertIn("DataLoader sharding 交给 Accelerate runtime", training_json)
+        self.assertIn("wrapper/version/multi-process behavior", training_json)
+        self.assertIn("pending execution", training_json)
+        prepared = section(
+            "target/sft-training-loop.html", "prepared-model-access"
+        )
+        prepared_paragraphs = [
+            block for block in prepared["blocks"]
+            if block["type"] == "paragraph"
+        ]
+        self.assertEqual(
+            {block["state"] for block in prepared_paragraphs},
+            {"verified", "inference"},
+        )
+        sharding = section(
+            "target/sft-training-loop.html", "dataloader-sharding"
+        )
+        self.assertEqual(sharding["blocks"][0]["state"], "inference")
+        for forbidden in (
+            "没有 distributed sampler，所以不分布式",
+            "no distributed sampler means no distribution",
+            "prepared model attributes 会失败",
+            "global speaker embedding 跨进程共享",
+            "训练已成功",
+            "validation loss",
+            "resume 成功",
+        ):
+            self.assertNotIn(forbidden, training_json)
+
+        export_page = pages["target/optimizer-checkpoint-export.html"]
+        export_json = json.dumps(export_page, ensure_ascii=False)
+        for text in (
+            "Hugging Face repo ID",
+            "实际导出静态上需要本地目录",
+            "accelerator.is_main_process",
+            "speaker row 3000",
+            "drop speaker encoder",
+            "safetensors 不等于 optimizer/RNG resume",
+        ):
+            self.assertIn(text, export_json)
+        ownership = section(
+            "target/optimizer-checkpoint-export.html", "accelerate-ownership"
+        )
+        self.assertEqual(
+            {
+                block["state"]
+                for block in ownership["blocks"]
+                if block["type"] == "paragraph"
+            },
+            {"verified", "inference"},
+        )
+        ownership_verified = next(
+            block for block in ownership["blocks"]
+            if block["type"] == "paragraph" and block["state"] == "verified"
+        )
+        self.assertEqual(ownership_verified["evidence_ids"], ["TGT-TRAIN-001"])
+        self.assertIn("accelerator.prepare", ownership_verified["text"])
+        for out_of_range_claim in (
+            "accumulate", "backward", "clip", "print", "is_main_process",
+            "unwrap_model",
+        ):
+            self.assertNotIn(out_of_range_claim, ownership_verified["text"])
+
+        custom_speaker = section(
+            "target/optimizer-checkpoint-export.html", "custom-speaker"
+        )
+        custom_verified = next(
+            block for block in custom_speaker["blocks"]
+            if block["type"] == "paragraph" and block["state"] == "verified"
+        )
+        self.assertNotIn("process-local pending", custom_verified["text"])
+
+        coverage_json = json.dumps(
+            pages["target/coverage-gaps.html"], ensure_ascii=False
+        )
+        self.assertIn(
+            "审计/构建 provenance，非官方 Qwen3-TTS 调用链",
+            coverage_json,
+        )
+        for text in (
+            "文档覆盖完成",
+            "源码静态核验",
+            "项目声明",
+            "硬件待验证",
+            "MindSpeed-MM",
+            "MindSpeed-LLM",
+            "MOSS-TTS",
+            "project-native",
+            "2.7.1 + CANN 8.5.0",
+            "target",
+            "2.7.1 + CANN 8.5.2",
+            "CANN 8.5.2 兼容性：unknown",
+            "本页不是迁移方案",
+            "本研究没有运行 CUDA、NPU、训练、推理或评测",
+        ):
+            self.assertIn(text, coverage_json)
+        for forbidden in (
+            "project-native 已复现",
+            "项目原生车道已复现",
+            "CANN 8.5.2 已兼容",
+            "CANN 8.5.2 已跑通",
+            "MindSpeed-LLM 支持 TTS scale",
+            "MOSS-TTS 提供 Ascend training",
+        ):
+            self.assertNotIn(forbidden, coverage_json)
+
+    def test_coverage_catalog_rows_match_target_coverage_csv_exactly(self):
+        pages = {
+            page["slug"]: page for page in load_page_catalogs(FULL_TARGET_CATALOGS)
+        }
+        coverage = pages["target/coverage-gaps.html"]
+        section = next(
+            item for item in coverage["sections"]
+            if item["id"] == "target-coverage"
+        )
+        table = next(
+            block for block in section["blocks"]
+            if block["type"] == "table" and block["headers"][0] == "path"
+        )
+        with (ROOT / "research/target-coverage.csv").open(
+            newline="", encoding="utf-8"
+        ) as handle:
+            reader = csv.DictReader(handle)
+            expected_headers = reader.fieldnames
+            expected_rows = [
+                [row[header] for header in expected_headers] for row in reader
+            ]
+        self.assertEqual(table["headers"], expected_headers)
+        self.assertEqual(table["rows"], expected_rows)
+        self.assertEqual(len(table["rows"]), 35)
+        self.assertEqual(
+            len({row[0] for row in table["rows"]}), len(table["rows"])
+        )
+
+    def test_coverage_path_attribute_is_derived_only_for_coverage_table(self):
+        rows = [[f"path-{index}&.py", "mapped"] for index in range(35)]
+        coverage_page = minimal_catalog(
+            block={
+                "type": "table",
+                "headers": ["path", "disposition"],
+                "rows": rows,
+            }
+        )["pages"][0]
+        coverage_page["sections"][0]["id"] = "target-coverage"
+        html = render_page(
+            coverage_page, [coverage_page], fixture_evidence(), []
+        )
+        self.assertEqual(html.count("data-coverage-path="), 35)
+        self.assertEqual(
+            sum(
+                "data-coverage-path=" in line
+                for line in html.splitlines()
+            ),
+            35,
+        )
+        self.assertIn('data-coverage-path="path-0&amp;.py"', html)
+
+        ordinary_page = minimal_catalog(
+            block={
+                "type": "table",
+                "headers": ["path", "disposition"],
+                "rows": [["a&b.py", "mapped"]],
+            }
+        )["pages"][0]
+        ordinary_html = render_page(
+            ordinary_page, [ordinary_page], fixture_evidence(), []
+        )
+        self.assertNotIn("data-coverage-path", ordinary_html)
+
+    def test_generated_full_site_has_exact_coverage_navigation_search_and_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            built = build_site(output, FULL_TARGET_CATALOGS)
+            html_paths = [path for path in built if path.suffix == ".html"]
+            self.assertEqual(len(html_paths), 13)
+            self.assertEqual(len(built), 14)
+
+            pages = load_page_catalogs(FULL_TARGET_CATALOGS)
+            self.assertEqual([page["order"] for page in pages], list(range(1, 14)))
+            expected_nav = [(page["order"], page["title"]) for page in pages]
+            external = json.loads(
+                (output / "assets/search-index.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(len(external), 47_504)
+            search_html = (output / "search.html").read_text(encoding="utf-8")
+            match = re.search(
+                r'<script id="search-data" type="application/json">(.*?)</script>',
+                search_html,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(match)
+            self.assertEqual(json.loads(match.group(1)), external)
+
+            for index, path in enumerate(html_paths):
+                html = path.read_text(encoding="utf-8")
+                nav = re.search(
+                    r'<ul id="chapter-tree" class="chapter-tree">(.*?)</ul>',
+                    html,
+                    re.DOTALL,
+                )
+                self.assertIsNotNone(nav)
+                self.assertEqual(
+                    [
+                        (int(order), title)
+                        for order, title in re.findall(
+                            r">(\d+) · ([^<]+)</a>", nav.group(1)
+                        )
+                    ],
+                    expected_nav,
+                )
+                self.assertEqual('rel="prev"' in html, index > 0)
+                self.assertEqual('rel="next"' in html, index + 1 < len(html_paths))
+
+                parser = LinkParser()
+                parser.feed(html)
+                self.assertEqual(len(parser.ids), len(set(parser.ids)))
+                for href in parser.links:
+                    if href.startswith("#"):
+                        self.assertIn(href[1:], parser.ids)
+                        continue
+                    if href.startswith(("http://", "https://", "mailto:")):
+                        continue
+                    target_text, _, fragment = href.partition("#")
+                    target_text = target_text.split("?", 1)[0]
+                    if not target_text.endswith(".html"):
+                        continue
+                    target = (path.parent / target_text).resolve()
+                    self.assertTrue(
+                        target.is_file(),
+                        f"{path.relative_to(output)} -> {href}",
+                    )
+                    if fragment:
+                        target_parser = LinkParser()
+                        target_parser.feed(target.read_text(encoding="utf-8"))
+                        self.assertIn(fragment, target_parser.ids)
+
+            coverage_html = (
+                output / "target/coverage-gaps.html"
+            ).read_text(encoding="utf-8")
+            paths = re.findall(
+                r'data-coverage-path="([^"]+)"', coverage_html
+            )
+            with (ROOT / "research/target-coverage.csv").open(
+                newline="", encoding="utf-8"
+            ) as handle:
+                expected_paths = [row["path"] for row in csv.DictReader(handle)]
+            self.assertEqual(paths, expected_paths)
+            self.assertEqual(len(paths), 35)
+            self.assertEqual(len(paths), len(set(paths)))
+            self.assertEqual(
+                sum(
+                    "data-coverage-path=" in line
+                    for line in coverage_html.splitlines()
+                ),
+                35,
+            )
+            for literal in (
+                "本页不是迁移方案",
+                "本研究没有运行 CUDA、NPU、训练、推理或评测",
+                "CANN 8.5.2 兼容性：unknown",
+            ):
+                self.assertIn(literal, coverage_html)
+
+            source_html = (
+                output / "indexes/source-files.html"
+            ).read_text(encoding="utf-8")
+            self.assertRegex(
+                source_html, r"MindSpeed-MM.*codeload archive"
+            )
+            self.assertRegex(
+                source_html, r"MindSpeed-LLM.*codeload archive"
+            )
+            self.assertNotRegex(source_html, r"MindSpeed-(?:MM|LLM).*clone")
+
+            for slug in TRAINING_PAGE_CONTRACTS:
+                html = (output / slug).read_text(encoding="utf-8")
+                self.assertIn('class="rail-card evidence-card"', html)
+                self.assertIn(TARGET_FIXED_PREFIX, html)
+
+    def test_foundation_archive_rows_use_project_display_names(self):
+        pages = load_page_catalogs([ROOT / "content/site-foundation.json"])
+        source_page = next(
+            page for page in pages if page["slug"] == "indexes/source-files.html"
+        )
+        provenance = next(
+            section for section in source_page["sections"]
+            if section["id"] == "snapshot-provenance"
+        )
+        table = next(
+            block for block in provenance["blocks"]
+            if block["type"] == "table"
+        )
+        archive_rows = [
+            row for row in table["rows"] if row[2] == "codeload archive"
+        ]
+        self.assertEqual(
+            [row[0] for row in archive_rows],
+            [
+                "MindSpeed-MM (mindspeed-mm-0edd553e)",
+                "MindSpeed-LLM (mindspeed-llm-434baff7)",
+            ],
+        )
+
+    def test_render_separates_sections_for_line_oriented_audits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, [ROOT / "content/site-foundation.json"])
+            html = (output / "indexes/source-files.html").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                '</section>\n<section id="file-filters">', html
+            )
+
+    def test_render_separates_index_rows_for_line_oriented_audits(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            build_site(output, [ROOT / "content/site-foundation.json"])
+            html = (output / "indexes/symbols-configs.html").read_text(
+                encoding="utf-8"
+            )
+            self.assertRegex(html, r"</tr>\n<tr id=\"entry-[0-9a-f]{16}\">")
+
     def test_cli_default_catalogs_load_only_approved_existing_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -354,6 +971,24 @@ class SiteBuilderTest(unittest.TestCase):
         self.assertIn(r"\u003c/script", encoded)
         self.assertIn(r"\u003e", encoded)
         self.assertIn(r"\u0026", encoded)
+
+    def test_top_level_search_list_serializes_one_safe_object_per_line(self):
+        documents = [
+            {"title": "MindSpeed-MM", "order": 1},
+            {"title": "</script> clone", "order": 2},
+        ]
+        encoded = script_safe_json(documents)
+        self.assertEqual(json.loads(encoded), documents)
+        self.assertEqual(
+            encoded.splitlines(),
+            [
+                "[",
+                '{"order":1,"title":"MindSpeed-MM"},',
+                '{"order":2,"title":"\\u003c/script\\u003e clone"}',
+                "]",
+            ],
+        )
+        self.assertNotIn("</script", encoded.lower())
 
     def test_every_page_search_form_targets_relative_search_page(self):
         with tempfile.TemporaryDirectory() as tmp:

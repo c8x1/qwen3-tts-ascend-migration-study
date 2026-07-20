@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="沿官方 12Hz Base 单说话人配方，拆解原始 JSONL、离线 codec materialization、Dataset item 与双轨 collate 张量。">
+  <title>SFT 数据预处理与 Collate · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">SFT 数据预处理与 Collate</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a class="active" aria-current="page" href="sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a href="sft-training-loop.html">8 · SFT 训练循环</a></li><li><a href="optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a href="coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-training / 7</p>
+        <h1>SFT 数据预处理与 Collate</h1>
+        <p class="lead">沿官方 12Hz Base 单说话人配方，拆解原始 JSONL、离线 codec materialization、Dataset item 与双轨 collate 张量。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>区分原始 JSONL 与离线加入 audio_codes 后的训练 JSONL</li><li>按固定源码解释 text ids、参考 mel、双轨输入、masks 与 codec-0 labels</li><li>识别 CUDA 预处理默认值、bucketing 缺口与运行时 sharding 边界</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与训练循环</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="public-recipe"><h2>公开配方范围</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> finetuning/README.md 公开的是 Qwen3-TTS 12Hz Base 1.7B/0.6B 的 single-speaker SFT；multi-speaker 与其他 advanced fine-tuning 被列为未来工作。本页不把公开范围扩写成 VoiceDesign、多说话人或完整预训练配方。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">职责</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>公开 SFT 范围与命令</td><td>finetuning/README.md</td><td>L3–L10, L12–L63</td></tr><tr><td>离线 codec 物化</td><td>finetuning/prepare_data.py</td><td>L24–L68</td></tr><tr><td>Dataset 与 collate</td><td>finetuning/dataset.py</td><td>L33–L217</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-SCOPE-001">证据 TGT-SCOPE-001</a></li></ul></section>
+<section id="jsonl-contract"><h2>JSONL 字段契约</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 公开 README 的原始行提供 audio/text/ref_audio；prepare_data.py 保留原字典字段并加入 audio_codes，写成新的 JSONL。audio 指向训练目标音频，text 是转写，ref_audio 是参考说话人音频；audio_codes 不是 Dataset 在线生成，而是离线阶段物化。简写契约：audio/text/ref_audio → audio/text/ref_audio/audio_codes。</p><ul class="source-refs"><li><a href="#evidence-TGT-DATA-001">证据 TGT-DATA-001</a></li></ul></section>
+<section id="preprocess-device"><h2>预处理设备默认值</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> prepare_data 的 argparse 目标默认值是 default=&quot;cuda:0&quot;，并把 args.device 原样传给 tokenizer 的 device_map=args.device。这只是官方预处理脚本的 target default，不表示自动设备选择，也不构成 NPU 映射。</p><ul class="source-refs"><li><a href="#evidence-TGT-DATA-003">证据 TGT-DATA-003</a></li></ul></section>
+<section id="offline-codes"><h2>离线 audio_codes 数据流</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>预处理入口</strong><code>finetuning/prepare_data.py</code><span>prepare_data.main</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>批量编码</strong><code>finetuning/prepare_data.py</code><span>tokenizer_12hz.encode</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>移回 CPU 并转列表</strong><code>finetuning/prepare_data.py</code><span>code.cpu().tolist</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>写入带 audio_codes 的 JSONL</strong><code>finetuning/prepare_data.py</code><span>json.dumps / f.writelines</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> 真实 offline flow 是读取全部 JSONL 行、以最多 32 条音频组成 batch、调用 tokenizer.encode、逐条执行 code.cpu().tolist 写回字典，最后序列化并写出 JSONL。最后不足 32 条的 batch 走同一 encode/materialize 路径。</p><ul class="source-refs"><li><a href="#evidence-TGT-DATA-001">证据 TGT-DATA-001</a></li></ul></section>
+<section id="dataset-item"><h2>Dataset item：文本、codec 与参考 mel</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>读取样本</strong><code>finetuning/dataset.py</code><span>TTSDataset.__getitem__</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造 assistant 文本</strong><code>finetuning/dataset.py</code><span>TTSDataset._build_assistant_text</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>生成 text ids</strong><code>finetuning/dataset.py</code><span>TTSDataset._tokenize_texts</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>规范化参考音频</strong><code>finetuning/dataset.py</code><span>TTSDataset._normalize_audio_inputs</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>提取参考 mel</strong><code>finetuning/dataset.py</code><span>TTSDataset.extract_mels</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> __getitem__ 把 text 包成 assistant ChatML，再经 processor 得到 text_ids 并去掉最后 5 个 token；audio_codes 转为 long tensor，固定源码注释和后续分配给出 (T,16)；ref_audio 必须解码为 24kHz，mel_spectrogram 使用 128-bin mel，并返回 text_ids、audio_codes、ref_mel。</p><ul class="source-refs"><li><a href="#evidence-TGT-DATA-002">证据 TGT-DATA-002</a></li></ul></section>
+<section id="collate-contract"><h2>Collate：双轨输入、masks 与 labels</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>batch 入口</strong><code>finetuning/dataset.py</code><span>TTSDataset.collate_fn</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>双轨输入与 codec 张量</strong><code>finetuning/dataset.py</code><span>input_ids / codec_ids</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造 embedding 与 attention masks</strong><code>finetuning/dataset.py</code><span>text_embedding_mask / codec_embedding_mask / codec_mask / attention_mask</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造 codec-0 labels</strong><code>finetuning/dataset.py</code><span>codec_0_labels</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> TTSDataset.collate_fn 分配双轨 input_ids=(B,T,2) 与 codec_ids=(B,T,16)。轨 0 放 text/control/pad，轨 1 放 codec control、speaker slot 与 codec-0；text_embedding_mask、codec_embedding_mask、codec_mask、attention_mask 控制各段，codec-0 labels 只在音频 codec-0 与 EOS 位置监督，其余为 -100。ref_mels 直接沿 batch 维拼接。</p><ul class="source-refs"><li><a href="#evidence-TGT-DATA-002">证据 TGT-DATA-002</a></li></ul></section>
+<section id="data-boundary"><h2>数据边界</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 固定脚本以 shuffle=True 构造普通 DataLoader，但本页不作 bucketing 声明。DataLoader 之后会交给 accelerator.prepare，因此 sharding 属于 Accelerate runtime 讨论；不能由 Dataset 文件静态推断多进程切分结果。</p></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="processor-contracts.html">← 上一页：Processor 输入与提示词契约</a><a rel="next" href="sft-training-loop.html">下一页：SFT 训练循环 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#public-recipe">公开配方范围</a><a data-rail-content href="#jsonl-contract">JSONL 字段契约</a><a data-rail-content href="#preprocess-device">预处理设备默认值</a><a data-rail-content href="#offline-codes">离线 audio_codes 数据流</a><a data-rail-content href="#dataset-item">Dataset item：文本、codec 与参考 mel</a><a data-rail-content href="#collate-contract">Collate：双轨输入、masks 与 labels</a><a data-rail-content href="#data-boundary">数据边界</a></section><section id="evidence-TGT-SCOPE-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-SCOPE-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>public recipe is 12Hz Base single-speaker SFT; advanced/multi-speaker work is not public here</p>
+<p data-rail-content>摘录：single-speaker fine-tuning</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/README.md#L3-L10">固定源码 finetuning/README.md · L3–L10 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-DATA-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-DATA-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>preprocessing materializes `audio_codes` into JSONL</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/prepare_data.py#L24-L68">固定源码 finetuning/prepare_data.py · L24–L68 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-DATA-003" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-DATA-003</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>preprocessing defaults to `cuda:0` and passes it as tokenizer `device_map`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/prepare_data.py#L24-L35">固定源码 finetuning/prepare_data.py · L24–L35 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-DATA-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-DATA-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>dataset makes ChatML text, 24kHz reference mel and dual-track collate tensors</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/dataset.py#L33-L217">固定源码 finetuning/dataset.py · L33–L217 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>code passes model, optimizer and DataLoader to `accelerator.prepare`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L62-L64">固定源码 finetuning/sft_12hz.py · L62–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-006" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-006</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>DataLoader sharding is delegated to Accelerate runtime after `prepare`; exact wrapper/version behavior is pending execution</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L58-L64">固定源码 finetuning/sft_12hz.py · L58–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>

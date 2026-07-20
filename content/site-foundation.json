@@ -113,8 +113,8 @@
               "headers": ["快照", "角色", "获取方式", "含义"],
               "rows": [
                 ["qwen3-tts-022e286b", "official-target", "Git sparse checkout", "固定 Git tree 的源码子集"],
-                ["mindspeed-mm-0edd553e", "main-reference", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
-                ["mindspeed-llm-434baff7", "scale-satellite", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
+                ["MindSpeed-MM (mindspeed-mm-0edd553e)", "main-reference", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
+                ["MindSpeed-LLM (mindspeed-llm-434baff7)", "scale-satellite", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
                 ["moss-tts-ad99ec5f", "speech-codec-satellite", "Git sparse checkout", "固定 Git tree 的源码子集"]
               ]
             }

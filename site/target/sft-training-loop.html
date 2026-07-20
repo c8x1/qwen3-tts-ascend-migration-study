@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="按固定 sft_12hz.py 的真实顺序讲解 BF16+FA2 默认、Accelerate ownership、embedding 汇总、Talker/MTP 损失与 AdamW 更新。">
+  <title>SFT 训练循环 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">SFT 训练循环</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a href="package-inference-api.html">2 · 包结构与推理 API</a></li><li><a href="model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a href="tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a href="tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a href="processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a href="sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a class="active" aria-current="page" href="sft-training-loop.html">8 · SFT 训练循环</a></li><li><a href="optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a href="coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a href="../search.html">13 · 全站搜索</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">target-training / 8</p>
+        <h1>SFT 训练循环</h1>
+        <p class="lead">按固定 sft_12hz.py 的真实顺序讲解 BF16+FA2 默认、Accelerate ownership、embedding 汇总、Talker/MTP 损失与 AdamW 更新。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>按源码顺序定位模型、配置、数据、优化器与 accelerator.prepare</li><li>区分 prepared model 的已核验调用点与 wrapper/multi-process 待执行行为</li><li>解释主 Talker 与 residual code predictor 的组合损失和更新顺序</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与训练循环</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+        <section id="target-precision-defaults"><h2>目标训练精度默认</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 官方 target 脚本用 Accelerator(mixed_precision=&quot;bf16&quot;)，并以 torch.bfloat16 与 flash_attention_2 装载模型；BF16+FA2 是目标默认，不是 Ascend 兼容性结论，也没有在本研究环境运行。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-000">证据 TGT-TRAIN-000</a></li></ul></section>
+<section id="setup"><h2>Setup 与 prepare ownership</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>装载模型</strong><code>finetuning/sft_12hz.py</code><span>Qwen3TTSModel.from_pretrained</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>装载配置</strong><code>finetuning/sft_12hz.py</code><span>AutoConfig.from_pretrained</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造数据集</strong><code>finetuning/sft_12hz.py</code><span>TTSDataset</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造 DataLoader</strong><code>finetuning/sft_12hz.py</code><span>DataLoader</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>构造优化器</strong><code>finetuning/sft_12hz.py</code><span>AdamW</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>交给 Accelerate</strong><code>finetuning/sft_12hz.py</code><span>accelerator.prepare</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> 脚本先构造 model/config/dataset/dataloader/AdamW，再把 qwen3tts.model、optimizer、train_dataloader 一起交给 accelerator.prepare，并以后者返回的 model/optimizer/DataLoader 继续训练。</p><div class="table-scroll"><table class="contract-table"><thead><tr><th scope="col">职责</th><th scope="col">源码路径</th><th scope="col">固定范围</th></tr></thead><tbody><tr><td>训练 setup、forward、update、export</td><td>finetuning/sft_12hz.py</td><td>L30–L158</td></tr><tr><td>训练 batch 合成</td><td>finetuning/dataset.py</td><td>L120–L217</td></tr><tr><td>残差码本训练 helper</td><td>qwen_tts/core/models/modeling_qwen3_tts.py</td><td>L1197–L1260, L1612–L1633</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-001">证据 TGT-TRAIN-001</a></li></ul></section>
+<section id="prepared-model-access"><h2>Prepared model 的直接属性访问</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 已核验的静态 call site：accelerator.prepare 返回的变量 model 随后直接访问 model.speaker_encoder、model.talker.model.text_embedding、model.talker.code_predictor，并调用 model.talker.forward_sub_talker_finetune。</p><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 这些 direct attributes/custom method 在具体 Accelerate wrapper/version 下是否透明，以及 wrapper/version/multi-process behavior，属于 inference / pending execution；静态源码既不能断言失败，也不能证明所有版本与启动模式均成功。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-002">证据 TGT-TRAIN-002</a></li><li><a href="#evidence-TGT-TRAIN-007">证据 TGT-TRAIN-007</a></li></ul></section>
+<section id="dataloader-sharding"><h2>DataLoader sharding 边界</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> DataLoader sharding 交给 Accelerate runtime：脚本把 train_dataloader 传入 accelerator.prepare，并遍历返回对象。具体 Accelerate 版本、launch 模式、进程数与 wrapper 决定实际切分；行为 pending execution，不能用“源码未显式构造 DistributedSampler”推断不分布式。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-006">证据 TGT-TRAIN-006</a></li></ul></section>
+<section id="embedding-flow"><h2>Speaker、文本与 codec embedding 数据流</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>参考 mel 编码</strong><code>finetuning/sft_12hz.py</code><span>model.speaker_encoder</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>文本 embedding</strong><code>finetuning/sft_12hz.py</code><span>model.talker.model.text_embedding</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>codec-0 embedding</strong><code>finetuning/sft_12hz.py</code><span>model.talker.model.codec_embedding</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>写入 speaker slot</strong><code>finetuning/sft_12hz.py</code><span>input_codec_embedding[:, 6, :] = speaker_embedding</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>合成 text+codec-0</strong><code>finetuning/sft_12hz.py</code><span>input_embeddings = input_text_embedding + input_codec_embedding</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>读取残差 codec embedding</strong><code>finetuning/sft_12hz.py</code><span>model.talker.code_predictor.get_input_embeddings</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>应用 codec mask</strong><code>finetuning/sft_12hz.py</code><span>codec_i_embedding * codec_mask.unsqueeze(-1)</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>逐项加入残差 embedding</strong><code>finetuning/sft_12hz.py</code><span>input_embeddings = input_embeddings + codec_i_embedding</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> ref_mels 经 speaker_encoder 得 embedding 并 detach；文本与 codec-0 embedding 各乘对应 mask，speaker embedding 写入 codec 轨第 6 位；随后循环 1..15 加入 residual codec embeddings，合成 input_embeddings。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-002">证据 TGT-TRAIN-002</a></li></ul></section>
+<section id="main-forward"><h2>Talker 主前向与 codec-0 loss</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>Talker 主前向</strong><code>finetuning/sft_12hz.py</code><span>model.talker</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>主损失</strong><code>finetuning/sft_12hz.py</code><span>outputs.loss</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> model.talker 接收错一位的 inputs_embeds、attention_mask 与 codec_0_labels，并请求 hidden states；outputs.loss 是 codec-0 主损失。TGT-MODEL-004 只用于连接后续 residual helper，不把主 Talker 前向误写成 forward_sub_talker_finetune。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-005">证据 TGT-TRAIN-005</a></li><li><a href="#evidence-TGT-MODEL-004">证据 TGT-MODEL-004</a></li></ul></section>
+<section id="sub-talker"><h2>Residual code predictor loss</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>筛选 Talker hidden states 与 codec ids</strong><code>finetuning/sft_12hz.py</code><span>hidden_states[codec_mask[:, :-1]] / codec_ids[codec_mask]</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>残差码本训练 helper</strong><code>qwen_tts/core/models/modeling_qwen3_tts.py</code><span>model.talker.forward_sub_talker_finetune</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>code predictor 前向</strong><code>qwen_tts/core/models/modeling_qwen3_tts.py</code><span>code_predictor.forward_finetune</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> 训练脚本先用 codec_mask 筛选 Talker hidden states 与完整 codec ids；forward_sub_talker_finetune 断言 shape，组合 hidden state 与前序 code embeddings，再真实调用 code_predictor.forward_finetune(labels=codec_ids[:,1:]) 返回 sub_talker_loss。</p><ul class="source-refs"><li><a href="#evidence-TGT-MODEL-004">证据 TGT-MODEL-004</a></li><li><a href="#evidence-TGT-TRAIN-005">证据 TGT-TRAIN-005</a></li></ul></section>
+<section id="training-loop"><h2>组合损失、反向、裁剪与 AdamW</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>组合损失</strong><code>finetuning/sft_12hz.py</code><span>outputs.loss + 0.3 * sub_talker_loss</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>反向传播</strong><code>finetuning/sft_12hz.py</code><span>accelerator.backward</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>同步步裁剪梯度</strong><code>finetuning/sft_12hz.py</code><span>accelerator.clip_grad_norm_</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>参数更新</strong><code>finetuning/sft_12hz.py</code><span>optimizer.step</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>清空梯度</strong><code>finetuning/sft_12hz.py</code><span>optimizer.zero_grad</span></div></div><p><span class="evidence-state" data-state="verified">状态：已核验</span> 每个 accumulate block 中，固定顺序是 outputs.loss + 0.3 * sub_talker_loss → accelerator.backward → 仅 sync_gradients 时 clip_grad_norm_(...,1.0) → AdamW.step → zero_grad。这里记录实际源码序列，不补写 scheduler。</p><ul class="source-refs"><li><a href="#evidence-TGT-TRAIN-005">证据 TGT-TRAIN-005</a></li></ul></section>
+<section id="training-boundary"><h2>训练生命周期边界</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 这个 fixed file 中没有 scheduler、validation 或 resume 流程；这是固定树审计边界，不证明其他版本或外部框架全局不存在。日志 print 与每 epoch export 也不是 loss 收敛、训练成功、质量达标或多进程正确性的证据。</p></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="sft-data-collate.html">← 上一页：SFT 数据预处理与 Collate</a><a rel="next" href="optimizer-checkpoint-export.html">下一页：优化器、Checkpoint 与导出 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#target-precision-defaults">目标训练精度默认</a><a data-rail-content href="#setup">Setup 与 prepare ownership</a><a data-rail-content href="#prepared-model-access">Prepared model 的直接属性访问</a><a data-rail-content href="#dataloader-sharding">DataLoader sharding 边界</a><a data-rail-content href="#embedding-flow">Speaker、文本与 codec embedding 数据流</a><a data-rail-content href="#main-forward">Talker 主前向与 codec-0 loss</a><a data-rail-content href="#sub-talker">Residual code predictor loss</a><a data-rail-content href="#training-loop">组合损失、反向、裁剪与 AdamW</a><a data-rail-content href="#training-boundary">训练生命周期边界</a></section><section id="evidence-TGT-TRAIN-000" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-000</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>SFT initializes BF16 Accelerate and loads BF16 model with FlashAttention-2</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L44-L52">固定源码 finetuning/sft_12hz.py · L44–L52 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>code passes model, optimizer and DataLoader to `accelerator.prepare`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L62-L64">固定源码 finetuning/sft_12hz.py · L62–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-005" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-005</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>exact loss is `outputs.loss + 0.3 * sub_talker_loss`, then backward, clip and optimizer step</p>
+<p data-rail-content>摘录：outputs.loss + 0.3 * sub_talker_loss</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L100-L121">固定源码 finetuning/sft_12hz.py · L100–L121 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-002" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-002</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>code accesses speaker encoder, Talker internals and custom method through variable `model`; `TGT-TRAIN-001` separately proves `model` is returned by `accelerator.prepare`</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L82-L111">固定源码 finetuning/sft_12hz.py · L82–L111 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-007" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-007</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>direct access to custom attributes/methods through the prepared model is wrapper/version-sensitive and pending multi-process execution</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L82-L111">固定源码 finetuning/sft_12hz.py · L82–L111 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-TRAIN-006" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-TRAIN-006</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>DataLoader sharding is delegated to Accelerate runtime after `prepare`; exact wrapper/version behavior is pending execution</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L58-L64">固定源码 finetuning/sft_12hz.py · L58–L64 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-MODEL-004" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-MODEL-004</h2>
+<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
+<p data-rail-content>`forward_sub_talker_finetune` returns residual-codebook loss</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1612-L1633">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1612–L1633 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section><section id="evidence-TGT-GAP-001" class="rail-card evidence-card" data-rail-card>
+<h2>TGT-GAP-001</h2>
+<p data-rail-content><span class="evidence-state" data-state="inference" data-evidence-state="inference">状态：静态推断</span></p>
+<p data-rail-content>absence of scheduler/resume/validation in this file is a fixed-tree audit inference, not proof of global absence</p>
+<a data-rail-content class="citation-link print-url" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L31-L158">固定源码 finetuning/sft_12hz.py · L31–L158 ↗</a>
+<a data-rail-content class="citation-link print-url" href="../../research/source-ledger.csv">来源台账 SRC-001</a>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>

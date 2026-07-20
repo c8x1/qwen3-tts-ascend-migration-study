@@ -200,13 +200,21 @@ def build_search_documents(pages, indexes) -> list[dict[str, str]]:
 
 
 def script_safe_json(data: object) -> str:
-    return (
-        json.dumps(
-            data,
+    def compact(value: object) -> str:
+        return json.dumps(
+            value,
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
         )
+
+    encoded = (
+        "[\n" + ",\n".join(compact(item) for item in data) + "\n]"
+        if isinstance(data, list) and data
+        else compact(data)
+    )
+    return (
+        encoded
         .replace("&", "\\u0026")
         .replace("<", "\\u003c")
         .replace(">", "\\u003e")
@@ -250,10 +258,19 @@ def _render_table(block: dict[str, object], section_id: str) -> str:
                 f"table {section_id}: row width {len(row)} expected {len(headers)}"
             )
     head = "".join(f"<th scope=\"col\">{_escape(cell)}</th>" for cell in headers)
-    body = "".join(
-        "<tr>" + "".join(f"<td>{_escape(cell)}</td>" for cell in row) + "</tr>"
-        for row in rows
+    tag_coverage_paths = (
+        section_id == "target-coverage" and headers[0] == "path"
     )
+    rendered_rows = []
+    for row in rows:
+        attributes = (
+            f' data-coverage-path="{_escape(row[0])}"'
+            if tag_coverage_paths
+            else ""
+        )
+        cells = "".join(f"<td>{_escape(cell)}</td>" for cell in row)
+        rendered_rows.append(f"<tr{attributes}>{cells}</tr>")
+    body = ("\n" if tag_coverage_paths else "").join(rendered_rows)
     return (
         '<div class="table-scroll"><table class="contract-table">'
         f"<thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>"
@@ -329,7 +346,7 @@ def _render_index_table(
             )
     return (
         '<div class="table-scroll"><table class="index-table">'
-        f"<thead><tr>{head}</tr></thead><tbody>{''.join(rows)}</tbody></table></div>"
+        f"<thead><tr>{head}</tr></thead><tbody>{'\n'.join(rows)}</tbody></table></div>"
     )
 
 
@@ -584,7 +601,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
         <p class="lead">{_escape(page['summary'])}</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul>{objectives}</ul></div><div><h2>前置知识</h2><ul>{prerequisites}</ul></div></div>
         <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
-        {''.join(sections)}
+        {'\n'.join(sections)}
         {page_nav}
       </article>
     </main>
