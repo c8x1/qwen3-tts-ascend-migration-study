@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Mapping
 
-from scripts.phase2_contracts import EVIDENCE_STATES, Snapshot
+from scripts.phase2_contracts import EVIDENCE_STATES, ROOT, Snapshot, load_snapshot_registry
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,7 @@ PHASE3_CATALOG_PATHS = (
     Path("content/reference-moss-tts.json"),
     Path("content/migration-mapping.json"),
 )
+_SOURCE_ID = re.compile(r"^SRC-[0-9]{3}$")
 
 
 def _relative_path(value: object) -> bool:
@@ -53,7 +57,7 @@ def _file_lines(index: dict[str, object], path: str) -> tuple[int | None, bool, 
     return None, False, False
 
 
-def _errors_for_record(record, registry, indexes, seen):
+def _errors_for_record(record, registry, indexes, ledger_ids, seen):
     errors: list[str] = []
     if not isinstance(record, dict):
         return ["evidence: expected object"]
@@ -79,6 +83,16 @@ def _errors_for_record(record, registry, indexes, seen):
     source_ids = record.get("source_ids")
     if not isinstance(source_ids, list) or not all(isinstance(item, str) for item in source_ids):
         errors.append("source_ids: expected string array")
+    elif not source_ids:
+        errors.append("source_ids: expected at least one item")
+    elif len(set(source_ids)) != len(source_ids):
+        errors.append("source_ids: duplicate item")
+    else:
+        for source_id in source_ids:
+            if not _SOURCE_ID.fullmatch(source_id):
+                errors.append(f"source_ids: invalid {source_id}")
+            elif source_id not in ledger_ids:
+                errors.append(f"source_ids: unknown {source_id}")
     snapshot_id = record.get("snapshot_id")
     path = record.get("path")
     start, end = record.get("start_line"), record.get("end_line")
@@ -107,14 +121,41 @@ def _errors_for_record(record, registry, indexes, seen):
     return errors
 
 
-def load_reference_evidence(path: Path, registry: dict[str, Snapshot], indexes: dict[str, dict[str, object]]) -> dict[str, ReferenceEvidence]:
+def _approved_phase2_inputs() -> tuple[dict[str, Snapshot], dict[str, dict[str, object]], set[str]]:
+    registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+    indexes = {
+        snapshot_id: json.loads(
+            (ROOT / "research/indexes" / f"{snapshot_id}.json").read_text(encoding="utf-8")
+        )
+        for snapshot_id in registry
+    }
+    with (ROOT / "research/source-ledger.csv").open(encoding="utf-8", newline="") as handle:
+        ledger_ids = {row["source_id"] for row in csv.DictReader(handle)}
+    return registry, indexes, ledger_ids
+
+
+def load_reference_evidence(
+    path: Path,
+    registry: dict[str, Snapshot] | None = None,
+    indexes: dict[str, dict[str, object]] | None = None,
+    ledger_ids: set[str] | None = None,
+) -> dict[str, ReferenceEvidence]:
+    """Load reference evidence against the approved Phase 2 registry and indexes.
+
+    Optional inputs exist only for isolated tests; callers use ``path`` alone.
+    """
+    if registry is None or indexes is None or ledger_ids is None:
+        approved_registry, approved_indexes, approved_ledger_ids = _approved_phase2_inputs()
+        registry = approved_registry if registry is None else registry
+        indexes = approved_indexes if indexes is None else indexes
+        ledger_ids = approved_ledger_ids if ledger_ids is None else ledger_ids
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or set(data) != {"schema_version", "evidence"} or data.get("schema_version") != 1 or not isinstance(data.get("evidence"), list):
         raise ValueError("reference evidence: expected schema_version 1 and evidence array")
     seen: set[str] = set()
     errors: list[str] = []
     for record in data["evidence"]:
-        errors.extend(_errors_for_record(record, registry, indexes, seen))
+        errors.extend(_errors_for_record(record, registry, indexes, ledger_ids, seen))
     if errors:
         raise ValueError("\n".join(errors))
     return {
@@ -128,10 +169,28 @@ def load_reference_evidence(path: Path, registry: dict[str, Snapshot], indexes: 
     }
 
 
-def validate_reference_coverage(rows, surfaces: set[str], evidence: dict[str, ReferenceEvidence]) -> list[str]:
+def validate_reference_coverage(
+    rows: Path | list[object],
+    indexes: Mapping[str, object],
+    evidence: dict[str, ReferenceEvidence],
+) -> list[str]:
     errors: list[str] = []
+    if not isinstance(indexes, Mapping):
+        return ["coverage: expected indexes object"]
+    surfaces = set(indexes)
+    if isinstance(rows, Path):
+        with rows.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            csv_rows = list(reader)
+            if reader.fieldnames != list(REFERENCE_COVERAGE_FIELDS):
+                errors.append("coverage: expected header " + ",".join(REFERENCE_COVERAGE_FIELDS))
+    elif isinstance(rows, list):
+        csv_rows = rows
+    else:
+        errors.append("coverage: expected rows array or CSV path")
+        csv_rows = []
     seen: set[str] = set()
-    for row in rows:
+    for row in csv_rows:
         if not isinstance(row, dict):
             errors.append("coverage: expected object")
             continue

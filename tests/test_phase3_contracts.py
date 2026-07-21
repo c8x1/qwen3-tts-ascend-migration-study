@@ -52,6 +52,28 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
         self.assertEqual(evidence["REF-MM-001"].snapshot_id, MM)
         self.assertIsInstance(evidence["REF-MM-001"], ReferenceEvidence)
 
+    def test_public_evidence_loader_uses_approved_phase2_inputs(self):
+        path = self.write_payload([{
+            "evidence_id": "REF-MM-PUBLIC-001", "snapshot_id": MM,
+            "path": "README.md", "start_line": 1, "end_line": 1,
+            "state": "verified", "claim": "x", "source_ids": ["SRC-019"],
+            "verification_condition": "",
+        }])
+        evidence = load_reference_evidence(path)
+        self.assertIn("REF-MM-PUBLIC-001", evidence)
+
+    def test_source_ids_require_unique_approved_ledger_entries(self):
+        for source_ids in ([], ["SRC-019", "SRC-019"], ["SRC-999"], ["not-an-id"]):
+            with self.subTest(source_ids=source_ids):
+                path = self.write_payload([{
+                    "evidence_id": "REF-SOURCE-001", "snapshot_id": MM,
+                    "path": "README.md", "start_line": 1, "end_line": 1,
+                    "state": "verified", "claim": "x", "source_ids": source_ids,
+                    "verification_condition": "",
+                }])
+                with self.assertRaisesRegex(ValueError, "source_ids"):
+                    load_reference_evidence(path, self.registry, self.indexes)
+
     def test_rejects_duplicate_unknown_and_bad_source_location(self):
         path = self.write_payload([
             {
@@ -112,7 +134,9 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
             {"surface": "launch", "disposition": "mapped", "page": "reference/mm.html", "section": "entry", "evidence_ids": "REF-MM-001", "reason": ""},
             {"surface": "launch", "disposition": "mapped", "page": "reference/mm.html", "section": "entry", "evidence_ids": "unknown", "reason": ""},
         ]
-        errors = validate_reference_coverage(rows, {"launch", "checkpoint"}, evidence)
+        errors = validate_reference_coverage(
+            rows, {"launch": {}, "checkpoint": {}}, evidence
+        )
         self.assertTrue(any("duplicate surface launch" in error for error in errors))
         self.assertTrue(any("missing surface checkpoint" in error for error in errors))
         self.assertTrue(any("unknown evidence unknown" in error for error in errors))
@@ -120,7 +144,36 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
     def test_malformed_coverage_rows_return_errors(self):
         errors = validate_reference_coverage(
             [{"surface": "launch", "evidence_ids": None}],
-            {"launch"}, {},
+            {"launch": {}}, {},
         )
         self.assertTrue(errors)
         self.assertTrue(any("expected fields" in error for error in errors))
+
+    def test_coverage_csv_header_and_short_rows_fail_closed(self):
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "coverage.csv"
+            path.write_text("surface,disposition\nlaunch,mapped\n", encoding="utf-8")
+            errors = validate_reference_coverage(path, {"launch": {}}, {})
+            self.assertTrue(any("expected header" in error for error in errors))
+            path.write_text(
+                "surface,disposition,page,section,evidence_ids,reason\nlaunch,mapped\n",
+                encoding="utf-8",
+            )
+            errors = validate_reference_coverage(path, {"launch": {}}, {})
+        self.assertTrue(any("expected string fields" in error for error in errors))
+
+    def test_schemas_publish_complete_record_contracts(self):
+        evidence_schema = json.loads(
+            (ROOT / "research/schemas/reference-evidence.schema.json").read_text()
+        )
+        coverage_schema = json.loads(
+            (ROOT / "research/schemas/reference-coverage.schema.json").read_text()
+        )
+        record = evidence_schema["properties"]["evidence"]["items"]
+        self.assertEqual(record["required"], [
+            "evidence_id", "snapshot_id", "path", "start_line", "end_line",
+            "state", "claim", "source_ids", "verification_condition",
+        ])
+        self.assertEqual(record["properties"]["source_ids"]["minItems"], 1)
+        self.assertTrue(record["properties"]["source_ids"]["uniqueItems"])
+        self.assertIn("allOf", coverage_schema)

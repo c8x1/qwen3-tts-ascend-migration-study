@@ -1,1 +1,18 @@
-{"type":"object","additionalProperties":false,"required":["surface","disposition","page","section","evidence_ids","reason"],"properties":{"surface":{"type":"string"},"disposition":{"enum":["mapped","excluded","pending"]},"page":{"type":"string"},"section":{"type":"string"},"evidence_ids":{"type":"string"},"reason":{"type":"string"}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["surface", "disposition", "page", "section", "evidence_ids", "reason"],
+  "properties": {
+    "surface": {"type": "string", "minLength": 1},
+    "disposition": {"enum": ["mapped", "excluded", "pending"]},
+    "page": {"type": "string"},
+    "section": {"type": "string"},
+    "evidence_ids": {"type": "string"},
+    "reason": {"type": "string"}
+  },
+  "allOf": [
+    {"if": {"properties": {"disposition": {"enum": ["mapped", "pending"]}}}, "then": {"properties": {"page": {"minLength": 1}, "section": {"minLength": 1}}}},
+    {"if": {"properties": {"disposition": {"enum": ["excluded", "pending"]}}}, "then": {"properties": {"reason": {"minLength": 1}}}}
+  ]
+}
