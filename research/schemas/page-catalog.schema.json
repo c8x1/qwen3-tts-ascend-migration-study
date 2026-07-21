@@ -20,7 +20,7 @@
         "properties": {
           "slug": {
             "type": "string",
-            "pattern": "^(index|search|indexes/[a-z0-9-]+|target/[a-z0-9-]+)\\.html$"
+            "pattern": "^(index|search|indexes/[a-z0-9-]+|target/[a-z0-9-]+|reference/[a-z0-9-]+|mapping/[a-z0-9-]+)\\.html$"
           },
           "title": {"type": "string", "minLength": 1},
           "summary": {"type": "string", "minLength": 1},

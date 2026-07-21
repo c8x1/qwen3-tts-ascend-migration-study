@@ -38,6 +38,10 @@ def default_catalogs() -> list[Path]:
         ROOT / "content/site-foundation.json",
         ROOT / "content/target-architecture.json",
         ROOT / "content/target-training.json",
+        ROOT / "content/reference-mindspeed-mm.json",
+        ROOT / "content/reference-mindspeed-llm.json",
+        ROOT / "content/reference-moss-tts.json",
+        ROOT / "content/migration-mapping.json",
     ]
     return [path for path in candidates if path.is_file()]
 

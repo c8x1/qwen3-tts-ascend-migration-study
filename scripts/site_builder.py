@@ -18,6 +18,7 @@ from scripts.phase2_contracts import (
     load_snapshot_registry,
     validate_against_schema,
 )
+from scripts.phase3_contracts import load_reference_evidence
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -133,7 +134,12 @@ def load_all_indexes(
 
 
 def load_all_evidence(root: Path = ROOT) -> dict[str, Evidence]:
-    return load_evidence(root / "research/target-evidence.json")
+    evidence = load_evidence(root / "research/target-evidence.json")
+    reference = load_reference_evidence(root / "research/reference-evidence.json")
+    duplicate = set(evidence) & set(reference)
+    if duplicate:
+        raise ValueError(f"duplicate evidence IDs: {sorted(duplicate)}")
+    return {**evidence, **reference}
 
 
 def _anchor(kind: str, snapshot_id: str, identity: str) -> str:

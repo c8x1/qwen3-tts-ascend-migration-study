@@ -23,6 +23,8 @@ class ReferenceEvidence:
     claim: str
     source_ids: tuple[str, ...]
     verification_condition: str
+    quote: str = ""
+    decision_refs: tuple[str, ...] = ()
 
 
 REFERENCE_COVERAGE_FIELDS = (

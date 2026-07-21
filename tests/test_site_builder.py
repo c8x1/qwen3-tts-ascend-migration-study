@@ -1823,6 +1823,17 @@ class SiteBuilderTest(unittest.TestCase):
                         f"{path.relative_to(output)} -> {href}",
                     )
 
+    def test_phase3_catalogs_load_and_build_with_reference_evidence(self):
+        catalogs = build_site_cli.default_catalogs()
+        pages = load_page_catalogs(catalogs)
+        slugs = {page["slug"] for page in pages}
+        self.assertTrue(any(slug.startswith("reference/") for slug in slugs))
+        self.assertTrue(any(slug.startswith("mapping/") for slug in slugs))
+        with tempfile.TemporaryDirectory() as tmp:
+            built = build_site(Path(tmp), catalogs)
+            self.assertTrue(any("reference/" in str(path) for path in built))
+            self.assertTrue(any("mapping/" in str(path) for path in built))
+
     def test_css_tokens_and_breakpoints_are_preserved(self):
         theme = (ROOT / "site/assets/theme.css").read_text(encoding="utf-8")
         layout = (ROOT / "site/assets/layout.css").read_text(encoding="utf-8")
