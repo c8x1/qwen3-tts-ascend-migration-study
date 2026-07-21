@@ -138,6 +138,11 @@
 
 ## Evidence gaps
 
+- Phase 3 Task 5 turns the static MindSpeed-MM, MindSpeed-LLM and MOSS-TTS
+  studies into 18 reference and migration pages.  These mappings retain fixed
+  source locations but do not establish runtime interoperability: every
+  pending-hardware mapping has an explicit 910B observation and pass condition.
+
 - Axe covers automated WCAG A/AA rules across five responsive/drawer states; it does not replace manual assistive-technology testing.
 - Visual regression coverage is intentionally limited to Chromium on Darwin at the three approved viewports.
 - Print verification covers visibility under emulated print media, not physical-printer output or multi-page pagination details.

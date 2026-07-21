@@ -177,3 +177,43 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
         self.assertEqual(record["properties"]["source_ids"]["minItems"], 1)
         self.assertTrue(record["properties"]["source_ids"]["uniqueItems"])
         self.assertIn("allOf", coverage_schema)
+
+    def test_task5_reference_catalogs_and_mapping_evidence_are_complete(self):
+        evidence = load_reference_evidence(ROOT / "research/reference-evidence.json")
+        self.assertEqual(
+            {row.snapshot_id for row in evidence.values() if row.snapshot_id},
+            {"mindspeed-mm-0edd553e", "mindspeed-llm-434baff7", "moss-tts-ad99ec5f"},
+        )
+        catalog_paths = {
+            "mindspeed-mm": ROOT / "content/reference-mindspeed-mm.json",
+            "mindspeed-llm": ROOT / "content/reference-mindspeed-llm.json",
+            "moss-tts": ROOT / "content/reference-moss-tts.json",
+            "migration-mapping": ROOT / "content/migration-mapping.json",
+        }
+        pages = {
+            group: json.loads(path.read_text(encoding="utf-8"))["pages"]
+            for group, path in catalog_paths.items()
+        }
+        self.assertEqual({group: len(rows) for group, rows in pages.items()}, {
+            "mindspeed-mm": 6, "mindspeed-llm": 4,
+            "moss-tts": 3, "migration-mapping": 5,
+        })
+        for page in pages["migration-mapping"]:
+            references = [
+                evidence_id for section in page["sections"]
+                for block in section["blocks"]
+                for evidence_id in block.get("evidence_ids", [])
+            ]
+            self.assertTrue(any(item.startswith("TGT-") for item in references))
+            self.assertTrue(any(item.startswith("REF-") for item in references))
+            pending = [
+                block for section in page["sections"] for block in section["blocks"]
+                if block.get("state") == "pending_hardware"
+            ]
+            self.assertTrue(pending)
+            self.assertTrue(all("观察" in block["text"] and "通过条件" in block["text"] for block in pending))
+        coverage_errors = validate_reference_coverage(
+            ROOT / "research/reference-coverage.csv",
+            {record.evidence_id: {} for record in evidence.values()}, evidence,
+        )
+        self.assertEqual(coverage_errors, [])
