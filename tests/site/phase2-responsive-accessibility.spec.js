@@ -37,7 +37,7 @@ test('JavaScript-disabled site retains article evidence and static directory', a
   const page = await context.newPage();
   await page.goto('/site/search.html');
   await expect(page.locator('#article-content')).toContainText('全站搜索');
-  await expect(page.locator('#no-script-index a')).toHaveCount(13);
+  await expect(page.locator('#no-script-index a')).toHaveCount(31);
   await page.goto('/site/target/model-architecture.html');
   await expect(page.locator('#article-content')).toContainText('模型');
   await expect(page.locator('#evidence-rail a[href^="https://"]')).not.toHaveCount(0);

@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 
-test('all thirteen pages are reachable through chapter navigation', async ({ page }) => {
+test('all Phase 3 pages are reachable through chapter navigation', async ({ page }) => {
   await page.goto('/site/');
-  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(13);
+  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(31);
 });
 
 test('previous and next links form a non-cyclic ordered path', async ({ page }) => {

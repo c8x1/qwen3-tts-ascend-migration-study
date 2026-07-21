@@ -126,10 +126,10 @@ test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
 test('chapter tree exposes the complete ordered path and current page', async ({ page }) => {
   await page.goto('/site/');
   const links = page.locator('#chapter-tree a[data-page-link]');
-  await expect(links).toHaveCount(13);
+  await expect(links).toHaveCount(31);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
   await expect(links.first()).toContainText('Qwen3-TTS');
-  await expect(links.last()).toContainText('全站搜索');
+  await expect(links.last()).toContainText('迁移：910B 验证');
 });
 
 test('without JavaScript the full flow and fallbacks remain readable while enhancements disappear', async ({ browser }) => {
@@ -143,7 +143,7 @@ test('without JavaScript the full flow and fallbacks remain readable while enhan
   await expect(page.locator('.search-enhancement')).toBeHidden();
   await expect(page.getByRole('searchbox', { name: '站内搜索' })).toBeVisible();
   await expect(page.getByRole('link', { name: '无脚本模式：浏览章节索引' })).toHaveAttribute('href', '#chapter-tree');
-  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(13);
+  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(31);
   await expect(page.getByRole('navigation', { name: '章节导航' })).toBeVisible();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('complementary', { name: '证据与页内目录' })).toBeVisible();
@@ -224,6 +224,7 @@ test('200% reflow fixture paints a deep drawer tree without document overflow or
   });
   const deepLink = page.getByRole('link', { name: '200% 下的第六层路径' });
   await expect(deepLink).toBeVisible();
+  await deepLink.scrollIntoViewIfNeeded();
   expect(await paintedArea(deepLink)).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   await expectWcagAA(page);

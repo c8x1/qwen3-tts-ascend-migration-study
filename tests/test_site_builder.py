@@ -433,7 +433,7 @@ class LinkParser(HTMLParser):
 
 
 class SiteBuilderTest(unittest.TestCase):
-    def test_full_catalog_has_thirteen_pages_and_required_training_sections(self):
+    def test_full_catalog_has_phase3_pages_and_required_training_sections(self):
         catalogs = [
             ROOT / "content/site-foundation.json",
             ROOT / "content/target-architecture.json",
