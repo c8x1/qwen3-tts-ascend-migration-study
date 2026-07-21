@@ -41,15 +41,16 @@ def _relative_path(value: object) -> bool:
     return not path.is_absolute() and ".." not in path.parts and "\\" not in value
 
 
-def _file_lines(index: dict[str, object], path: str) -> int | None:
+def _file_lines(index: dict[str, object], path: str) -> tuple[int | None, bool, bool]:
     files = index.get("files", [])
     if not isinstance(files, list):
-        return None
+        return None, False, False
     for row in files:
         if isinstance(row, dict) and row.get("path") == path:
             lines = row.get("line_count")
-            return lines if isinstance(lines, int) else None
-    return None
+            binary = row.get("kind") == "binary"
+            return (lines if type(lines) is int else None), binary, True
+    return None, False, False
 
 
 def _errors_for_record(record, registry, indexes, seen):
@@ -89,10 +90,12 @@ def _errors_for_record(record, registry, indexes, seen):
     elif not _relative_path(path):
         errors.append("path: expected relative POSIX materialized path")
     else:
-        lines = _file_lines(indexes.get(snapshot_id, {}), path)
-        if lines is None:
+        lines, binary, found = _file_lines(indexes.get(snapshot_id, {}), path)
+        if not found:
             errors.append(f"path: not materialized {path}")
-        if not isinstance(start, int) or not isinstance(end, int) or start < 1 or end < start:
+        elif binary or lines is None:
+            errors.append("line range: binary or non-text file has no line range")
+        if type(start) is not int or type(end) is not int or start < 1 or end < start:
             errors.append("line range: expected positive ordered integers")
         elif lines is not None and end > lines:
             errors.append(f"line range: end {end} exceeds {lines}")
@@ -133,7 +136,10 @@ def validate_reference_coverage(rows, surfaces: set[str], evidence: dict[str, Re
             errors.append("coverage: expected object")
             continue
         if set(row) != set(REFERENCE_COVERAGE_FIELDS):
-            errors.append("coverage: unexpected fields")
+            errors.append("coverage: expected fields")
+            continue
+        if not all(isinstance(row[field], str) for field in REFERENCE_COVERAGE_FIELDS):
+            errors.append("coverage: expected string fields")
             continue
         surface = row["surface"]
         if surface in seen:
@@ -143,6 +149,10 @@ def validate_reference_coverage(rows, surfaces: set[str], evidence: dict[str, Re
             errors.append(f"coverage: unknown surface {surface}")
         if row["disposition"] not in REFERENCE_DISPOSITIONS:
             errors.append(f"coverage: unknown disposition {row['disposition']}")
+        if row["disposition"] in {"mapped", "pending"} and (not row["page"] or not row["section"]):
+            errors.append("coverage: mapped/pending requires page and section")
+        if row["disposition"] in {"excluded", "pending"} and not row["reason"]:
+            errors.append("coverage: excluded/pending requires reason")
         for evidence_id in filter(None, row["evidence_ids"].split(";")):
             if evidence_id not in evidence:
                 errors.append(f"coverage: unknown evidence {evidence_id}")

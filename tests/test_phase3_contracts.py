@@ -82,6 +82,26 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "verification_condition"):
             load_reference_evidence(path, self.registry, self.indexes)
 
+    def test_null_snapshot_and_binary_or_boolean_lines_fail_closed(self):
+        null_path = self.write_payload([{
+            "evidence_id": "REF-NULL-001", "snapshot_id": None,
+            "path": "README.md", "start_line": 1, "end_line": 1,
+            "state": "verified", "claim": "x", "source_ids": [],
+            "verification_condition": "",
+        }])
+        with self.assertRaisesRegex(ValueError, "null snapshot"):
+            load_reference_evidence(null_path, self.registry, self.indexes)
+        indexes = {key: dict(value) for key, value in self.indexes.items()}
+        indexes[MM]["files"] = [{"path": "README.md", "line_count": True, "kind": "text"}]
+        bool_path = self.write_payload([{
+            "evidence_id": "REF-BOOL-001", "snapshot_id": MM,
+            "path": "README.md", "start_line": True, "end_line": True,
+            "state": "verified", "claim": "x", "source_ids": [],
+            "verification_condition": "",
+        }])
+        with self.assertRaisesRegex(ValueError, "line"):
+            load_reference_evidence(bool_path, self.registry, indexes)
+
     def test_coverage_requires_one_row_per_surface_and_known_evidence(self):
         evidence = {
             "REF-MM-001": ReferenceEvidence(
@@ -96,3 +116,11 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
         self.assertTrue(any("duplicate surface launch" in error for error in errors))
         self.assertTrue(any("missing surface checkpoint" in error for error in errors))
         self.assertTrue(any("unknown evidence unknown" in error for error in errors))
+
+    def test_malformed_coverage_rows_return_errors(self):
+        errors = validate_reference_coverage(
+            [{"surface": "launch", "evidence_ids": None}],
+            {"launch"}, {},
+        )
+        self.assertTrue(errors)
+        self.assertTrue(any("expected fields" in error for error in errors))
