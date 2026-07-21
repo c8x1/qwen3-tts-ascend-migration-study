@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from scripts.phase2_contracts import (
+    COVERAGE_FIELDS,
     PHASE2_CATALOG_PATHS,
     load_evidence,
     load_snapshot_registry,
@@ -133,10 +134,22 @@ def main() -> int:
         errors.append(str(error))
 
     coverage_rows: list[dict[str, str]] = []
+    coverage_shape_valid = False
     coverage_path = ROOT / "research/target-coverage.csv"
     try:
         with coverage_path.open(encoding="utf-8", newline="") as handle:
-            coverage_rows = list(csv.DictReader(handle))
+            reader = csv.DictReader(handle)
+            coverage_rows = list(reader)
+            coverage_shape_valid = (
+                reader.fieldnames == list(COVERAGE_FIELDS)
+                and all(
+                    all(
+                        field in row and isinstance(row.get(field), str)
+                        for field in COVERAGE_FIELDS
+                    )
+                    for row in coverage_rows
+                )
+            )
         if evidence is not None:
             target = json.loads(
                 (
@@ -145,7 +158,7 @@ def main() -> int:
             )
             errors.extend(
                 validate_target_coverage(
-                    target, coverage_rows, evidence=evidence
+                    target, coverage_path, evidence=evidence
                 )
             )
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -159,11 +172,12 @@ def main() -> int:
             errors.append(str(error))
 
     if evidence is not None and pages:
-        errors.extend(
-            validate_generated_site(
-                ROOT / "site", pages, evidence, coverage_rows
+        if coverage_shape_valid:
+            errors.extend(
+                validate_generated_site(
+                    ROOT / "site", pages, evidence, coverage_rows
+                )
             )
-        )
         errors.extend(validate_fixed_links(ROOT / "site", registry))
     errors.extend(validate_public_tracking(ROOT))
 

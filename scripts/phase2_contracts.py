@@ -800,6 +800,7 @@ def validate_target_coverage(
         normalized: dict[str, str] = {}
         for field in COVERAGE_FIELDS:
             if field not in row:
+                errors.append(f"{prefix}: missing field {field}")
                 normalized[field] = ""
                 continue
             value = row.get(field)
@@ -903,6 +904,7 @@ def validate_target_coverage(
 class HtmlLink:
     url: str
     fragment: str
+    runtime: bool
 
 
 @dataclass(frozen=True)
@@ -915,6 +917,7 @@ class ParsedHtml:
         self.ids: set[str] = set()
         self.headings: list[int] = []
         self.local_links: list[HtmlLink] = []
+        self.stylesheet_links: list[HtmlLink] = []
         self.anchors: list[HtmlAnchor] = []
         self.aria_controls: list[str] = []
         self.remote_resources: list[str] = []
@@ -926,6 +929,7 @@ class _DocumentParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.document = ParsedHtml()
+        self._style_depth = 0
 
     def handle_starttag(self, tag: str, attrs) -> None:
         attributes = {key: (value or "") for key, value in attrs}
@@ -937,10 +941,13 @@ class _DocumentParser(HTMLParser):
             self.document.aria_controls.extend(
                 attributes["aria-controls"].split()
             )
+        classes = set(attributes.get("class", "").split())
         if "data-evidence-state" in attributes:
             self.document.evidence_states.append(
                 attributes["data-evidence-state"]
             )
+        if "evidence-state" in classes and "data-state" in attributes:
+            self.document.evidence_states.append(attributes["data-state"])
 
         if tag == "a":
             self.document.anchors.append(HtmlAnchor(attributes))
@@ -949,28 +956,98 @@ class _DocumentParser(HTMLParser):
             self._collect_link(attributes.get("action", ""), runtime=True)
         elif tag in {"script", "img", "audio", "video", "source"}:
             self._collect_link(attributes.get("src", ""), runtime=True)
+            if tag in {"img", "source"}:
+                for url in _srcset_urls(attributes.get("srcset", "")):
+                    self._collect_link(url, runtime=True)
+            if tag == "video":
+                self._collect_link(attributes.get("poster", ""), runtime=True)
         elif tag == "link" and attributes.get("href"):
             rel = set(attributes.get("rel", "").casefold().split())
             if rel & {"stylesheet", "preload", "modulepreload", "icon"}:
-                self._collect_link(attributes["href"], runtime=True)
+                link = self._collect_link(attributes["href"], runtime=True)
+                if link is not None and "stylesheet" in rel:
+                    self.document.stylesheet_links.append(link)
+
+        if attributes.get("style"):
+            self._collect_css(attributes["style"])
+        if tag == "style":
+            self._style_depth += 1
 
         for key in ("data-search-url", "data-search-index", "data-search-data"):
             if attributes.get(key):
                 self._collect_link(attributes[key], runtime=True)
 
-    def _collect_link(self, url: str, *, runtime: bool) -> None:
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "style" and self._style_depth:
+            self._style_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._style_depth:
+            self._collect_css(data)
+
+    def _collect_css(self, text: str) -> None:
+        for url, is_import in _css_references(text):
+            link = self._collect_link(url, runtime=True)
+            if link is not None and is_import:
+                self.document.stylesheet_links.append(link)
+
+    def _collect_link(self, url: str, *, runtime: bool) -> HtmlLink | None:
         if not url:
-            return
+            return None
         parsed = urllib.parse.urlsplit(url)
         if parsed.scheme or parsed.netloc:
             if runtime:
                 self.document.remote_resources.append(url)
             elif parsed.scheme != "https":
                 self.document.remote_anchors.append(url)
-            return
-        self.document.local_links.append(
-            HtmlLink(url=url, fragment=urllib.parse.unquote(parsed.fragment))
+            return None
+        link = HtmlLink(
+            url=url,
+            fragment=urllib.parse.unquote(parsed.fragment),
+            runtime=runtime,
         )
+        self.document.local_links.append(link)
+        return link
+
+
+def _srcset_urls(value: str) -> list[str]:
+    urls: list[str] = []
+    for candidate in value.split(","):
+        fields = candidate.strip().split()
+        if fields:
+            urls.append(fields[0])
+    return urls
+
+
+_CSS_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+_CSS_URL = re.compile(
+    r"url\(\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s)'\"](?:[^)]*?)))\s*\)",
+    re.IGNORECASE,
+)
+_CSS_STRING_IMPORT = re.compile(
+    r"@import\s+(?:\"([^\"]*)\"|'([^']*)')", re.IGNORECASE
+)
+
+
+def _css_references(text: str) -> list[tuple[str, bool]]:
+    css = _CSS_COMMENT.sub("", text)
+    matches: list[tuple[int, str, bool]] = []
+    for match in _CSS_URL.finditer(css):
+        url = next((group for group in match.groups() if group is not None), "")
+        prefix = css[max(0, match.start() - 32):match.start()]
+        is_import = re.search(r"@import\s*$", prefix, re.IGNORECASE) is not None
+        matches.append((match.start(), url.strip(), is_import))
+    for match in _CSS_STRING_IMPORT.finditer(css):
+        url = next((group for group in match.groups() if group is not None), "")
+        matches.append((match.start(), url.strip(), True))
+    references: list[tuple[str, bool]] = []
+    seen: set[tuple[str, bool]] = set()
+    for _, url, is_import in sorted(matches):
+        item = (url, is_import)
+        if url and item not in seen:
+            seen.add(item)
+            references.append(item)
+    return references
 
 
 def parse_html(path: Path) -> ParsedHtml:
@@ -1001,6 +1078,29 @@ def _block_evidence_ids(block):
 
 def validate_cross_contracts(pages, evidence, coverage) -> list[str]:
     errors: list[str] = []
+    normalized_coverage: list[Mapping[str, str]] = []
+    if not isinstance(coverage, list):
+        errors.append("cross coverage: expected array")
+    else:
+        for index, row in enumerate(coverage):
+            prefix = f"cross coverage[{index}]"
+            if not isinstance(row, Mapping):
+                errors.append(f"{prefix}: expected object")
+                continue
+            path = row.get("path")
+            if isinstance(path, str) and path:
+                prefix += f" {path}"
+            valid = True
+            for field in COVERAGE_FIELDS:
+                if field not in row:
+                    errors.append(f"{prefix}: missing field {field}")
+                    valid = False
+                elif not isinstance(row.get(field), str):
+                    errors.append(f"{prefix}.{field}: expected string")
+                    valid = False
+            if valid:
+                normalized_coverage.append(row)
+    coverage = normalized_coverage
     known_evidence = set(evidence)
     catalog = {
         page["slug"]: {
@@ -1144,6 +1244,63 @@ def validate_remote_resources(
     return errors
 
 
+def _validate_runtime_stylesheets(
+    site_root: Path, stylesheet_paths: list[Path]
+) -> list[str]:
+    errors: list[str] = []
+    queued = [path.resolve() for path in stylesheet_paths]
+    visited: set[Path] = set()
+    seen_errors: set[str] = set()
+    while queued:
+        source_path = queued.pop(0)
+        if source_path in visited:
+            continue
+        visited.add(source_path)
+        if not source_path.is_relative_to(site_root):
+            message = (
+                "site: runtime stylesheet escapes site "
+                f"{source_path.as_posix()}"
+            )
+            if message not in seen_errors:
+                seen_errors.add(message)
+                errors.append(message)
+            continue
+        relative = source_path.relative_to(site_root).as_posix()
+        try:
+            css = source_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as error:
+            message = f"{relative}: unreadable stylesheet {error}"
+            if message not in seen_errors:
+                seen_errors.add(message)
+                errors.append(message)
+            continue
+        for url, is_import in _css_references(css):
+            parsed = urllib.parse.urlsplit(url)
+            if parsed.scheme or parsed.netloc:
+                message = f"{relative}: remote runtime resource {url}"
+                if message not in seen_errors:
+                    seen_errors.add(message)
+                    errors.append(message)
+                continue
+            target, error = _resolve_local_target(
+                site_root, source_path, url
+            )
+            if error:
+                if error not in seen_errors:
+                    seen_errors.add(error)
+                    errors.append(error)
+                continue
+            if not target.is_relative_to(site_root):
+                message = f"{relative}: runtime resource escapes site {url}"
+                if message not in seen_errors:
+                    seen_errors.add(message)
+                    errors.append(message)
+                continue
+            if is_import or target.suffix.casefold() == ".css":
+                queued.append(target)
+    return errors
+
+
 def validate_generated_site(
     site_root,
     pages,
@@ -1163,6 +1320,7 @@ def validate_generated_site(
         errors.append(f"site: unexpected generated output {relative}")
 
     parsed_pages: dict[Path, ParsedHtml] = {}
+    stylesheet_paths: list[Path] = []
     for relative in sorted(expected & actual):
         if not relative.endswith(".html"):
             continue
@@ -1179,6 +1337,12 @@ def validate_generated_site(
             if error:
                 errors.append(error)
                 continue
+            if link.runtime and not target.is_relative_to(site_root):
+                errors.append(
+                    f"{source_path.relative_to(site_root).as_posix()}: "
+                    f"runtime resource escapes site {link.url}"
+                )
+                continue
             if link.fragment and target.suffix == ".html":
                 target_doc = parsed_pages.get(target) or parse_html(target)
                 if link.fragment not in target_doc.ids:
@@ -1186,12 +1350,19 @@ def validate_generated_site(
                         f"{source_path.relative_to(site_root).as_posix()}: "
                         f"broken fragment {link.url}"
                     )
+        for link in parsed.stylesheet_links:
+            target, error = _resolve_local_target(
+                site_root, source_path, link.url
+            )
+            if error is None and target.is_relative_to(site_root):
+                stylesheet_paths.append(target)
         errors.extend(
             validate_aria_references(source_path, parsed, site_root)
         )
         errors.extend(
             validate_remote_resources(source_path, parsed, site_root)
         )
+    errors.extend(_validate_runtime_stylesheets(site_root, stylesheet_paths))
 
     with tempfile.TemporaryDirectory() as tmp:
         from scripts.site_builder import build_site

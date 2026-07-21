@@ -741,7 +741,11 @@ class TargetCoverageTest(unittest.TestCase):
             }
         ]
         self.assertEqual(
-            ["coverage[0] pkg.py: page and section required"],
+            [
+                "coverage[0] pkg.py: missing field page",
+                "coverage[0] pkg.py: missing field section",
+                "coverage[0] pkg.py: page and section required",
+            ],
             contracts.validate_target_coverage(
                 index, rows, evidence={}, page_catalog=[]
             ),
@@ -1156,6 +1160,61 @@ class TargetCoverageTest(unittest.TestCase):
             output.getvalue(),
         )
 
+    def test_phase2_cli_malformed_coverage_fails_without_cross_contract_traceback(self):
+        _, pages, _, _ = full_inputs()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            indexes = root / "research/indexes"
+            indexes.mkdir(parents=True)
+            (root / "research/target-coverage.csv").write_text(
+                "path,page,section,evidence_ids,reason\n"
+                "pkg.py,index.html,public-scope,,missing disposition\n",
+                encoding="utf-8",
+            )
+            (indexes / "qwen3-tts-022e286b.json").write_text(
+                json.dumps({"files": [{"path": "pkg.py"}]}),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with (
+                patch.object(validate_phase2_cli, "ROOT", root),
+                patch.object(validate_phase2_cli, "validate_indexes", return_value=[]),
+                patch.object(
+                    validate_phase2_cli, "load_snapshot_registry", return_value={}
+                ),
+                patch.object(validate_phase2_cli, "load_evidence", return_value={}),
+                patch.object(
+                    validate_phase2_cli, "load_page_catalogs", return_value=pages
+                ),
+                patch.object(
+                    validate_phase2_cli,
+                    "validate_generated_site",
+                    side_effect=KeyError("disposition"),
+                ) as generated_validator,
+                patch.object(validate_phase2_cli, "validate_fixed_links", return_value=[]),
+                patch.object(
+                    validate_phase2_cli, "validate_public_tracking", return_value=[]
+                ),
+                patch.object(sys, "argv", ["validate_phase2.py"]),
+                contextlib.redirect_stderr(output),
+            ):
+                try:
+                    result = validate_phase2_cli.main()
+                except Exception as error:  # pragma: no cover - RED diagnostic
+                    self.fail(f"CLI raised {type(error).__name__}: {error}")
+            self.assertEqual(result, 1)
+            generated_validator.assert_not_called()
+            self.assertIn(
+                "target coverage: expected header "
+                "path,disposition,page,section,evidence_ids,reason",
+                output.getvalue(),
+            )
+            self.assertIn(
+                "coverage[0] pkg.py: missing field disposition",
+                output.getvalue(),
+            )
+            self.assertNotIn("Traceback", output.getvalue())
+
 
 class GeneratedSiteContractTest(unittest.TestCase):
     def test_committed_catalog_coverage_and_evidence_bridge_is_complete(self):
@@ -1183,6 +1242,128 @@ class GeneratedSiteContractTest(unittest.TestCase):
         )
         self.assertIn(
             "index.html: remote runtime resource https://example.com/x.js", errors
+        )
+
+    def test_runtime_url_surface_rejects_remote_html_and_css_resources(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        assets = root / "assets"
+        for name in ("local.png", "local-poster.png", "local-inline.png", "local-css.png"):
+            (assets / name).write_bytes(b"local")
+        (assets / "nested.css").write_text(".ok { color: inherit; }\n", encoding="utf-8")
+
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                "</main>",
+                '<img srcset="assets/local.png 1x, https://runtime.example/img.png 2x" '
+                'style="background-image: url(assets/local-inline.png)">'
+                '<source srcset="https://runtime.example/source.webp 1x">'
+                '<video poster="https://runtime.example/poster.png"></video>'
+                '<div style="mask-image:url(https://runtime.example/inline.svg)"></div>'
+                '<style>@import "https://runtime.example/block.css"; '
+                '.remote{background:url(https://runtime.example/block.png)} '
+                '.local{background:url(assets/local.png)}</style>'
+                "</main>",
+            ),
+            encoding="utf-8",
+        )
+        with (assets / "theme.css").open("a", encoding="utf-8") as handle:
+            handle.write(
+                '\n@import "nested.css";\n'
+                '@import "https://runtime.example/font.css";\n'
+                '.asset-local{background:url("local-css.png")}\n'
+                '.asset-remote{background:url(https://runtime.example/font.png)}\n'
+            )
+
+        errors = validate_generated_site(root, pages, evidence, coverage)
+        for url in (
+            "https://runtime.example/img.png",
+            "https://runtime.example/source.webp",
+            "https://runtime.example/poster.png",
+            "https://runtime.example/inline.svg",
+            "https://runtime.example/block.css",
+            "https://runtime.example/block.png",
+        ):
+            self.assertIn(f"index.html: remote runtime resource {url}", errors)
+        for url in (
+            "https://runtime.example/font.css",
+            "https://runtime.example/font.png",
+        ):
+            message = f"assets/theme.css: remote runtime resource {url}"
+            self.assertEqual(errors.count(message), 1, errors)
+        self.assertFalse(
+            any("broken local link assets/local" in error for error in errors),
+            errors,
+        )
+        self.assertFalse(
+            any("broken local link nested.css" in error for error in errors),
+            errors,
+        )
+
+    def test_visible_data_state_is_validated_as_evidence_status(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                'class="evidence-state" data-state="verified"',
+                'class="evidence-state" data-state="invalid-visible"',
+                1,
+            ),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "index.html: invalid evidence status invalid-visible",
+            validate_generated_site(root, pages, evidence, coverage),
+        )
+
+    def test_runtime_stylesheet_cannot_use_decision_link_escape_allowlist(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                "</head>",
+                '<link rel="stylesheet" '
+                'href="../research/reference-selection-proposal.md">'
+                "</head>",
+            ),
+            encoding="utf-8",
+        )
+        try:
+            errors = validate_generated_site(root, pages, evidence, coverage)
+        except Exception as error:  # pragma: no cover - RED diagnostic
+            self.fail(
+                f"runtime stylesheet validation raised "
+                f"{type(error).__name__}: {error}"
+            )
+        self.assertIn(
+            "index.html: runtime resource escapes site "
+            "../research/reference-selection-proposal.md",
+            errors,
+        )
+
+    def test_runtime_image_cannot_use_decision_link_escape_allowlist(self):
+        context, root, pages, evidence, coverage = generated_copy()
+        self.addCleanup(context.cleanup)
+        index = root / "index.html"
+        html = index.read_text(encoding="utf-8")
+        index.write_text(
+            html.replace(
+                "</main>",
+                '<img src="../research/reference-selection-proposal.md">'
+                "</main>",
+            ),
+            encoding="utf-8",
+        )
+        self.assertIn(
+            "index.html: runtime resource escapes site "
+            "../research/reference-selection-proposal.md",
+            validate_generated_site(root, pages, evidence, coverage),
         )
 
     def test_only_allowlisted_decision_links_may_leave_site_root(self):
@@ -1295,6 +1476,29 @@ class GeneratedSiteContractTest(unittest.TestCase):
         self.assertIn(
             "important evidence PH1-ENV-LANES: not referenced by any page", errors
         )
+
+    def test_cross_contracts_are_total_for_malformed_coverage_rows(self):
+        _, pages, evidence, _ = full_inputs()
+        cases = (
+            ({}, "cross coverage: expected array"),
+            ([None], "cross coverage[0]: expected object"),
+            (
+                [{"path": "pkg.py"}],
+                "cross coverage[0] pkg.py: missing field disposition",
+            ),
+        )
+        for malformed, expected in cases:
+            with self.subTest(expected=expected):
+                try:
+                    errors = validate_cross_contracts(
+                        pages, evidence, malformed
+                    )
+                except Exception as error:  # pragma: no cover - RED diagnostic
+                    self.fail(
+                        f"validate_cross_contracts raised "
+                        f"{type(error).__name__}: {error}"
+                    )
+                self.assertIn(expected, errors)
 
     def test_unexpected_generated_output_is_rejected(self):
         context, root, pages, evidence, coverage = generated_copy()
