@@ -977,12 +977,26 @@ class SiteBuilderTest(unittest.TestCase):
             output = Path(tmp)
             build_site(output, FULL_TARGET_CATALOGS)
             html = (output / "index.html").read_text(encoding="utf-8")
+            expected_excerpt = (
+                '<pre id="qwen-load-example"><code>'
+                "    def from_pretrained(\n"
+                "        cls,\n"
+                "        pretrained_model_name_or_path: str,\n"
+                "        **kwargs,\n"
+                "    ) -&gt; &quot;Qwen3TTSModel&quot;:"
+                "</code></pre>"
+            )
             self.assertIn('class="source-link print-url"', html)
             self.assertIn('data-copy-target="qwen-load-example"', html)
             self.assertIn('id="qwen-load-example"', html)
-            self.assertIn("def from_pretrained(", html)
+            self.assertIn(expected_excerpt, html)
             self.assertIn('data-source-path="qwen_tts/inference/qwen3_tts_model.py"', html)
-            self.assertIn('data-start-line="83" data-end-line="92"', html)
+            self.assertIn('data-start-line="83" data-end-line="87"', html)
+            self.assertIn(
+                "qwen_tts/inference/qwen3_tts_model.py#L83-L87",
+                html,
+            )
+            self.assertNotIn("#L83-L92", html)
             self.assertNotIn("Load a Qwen3 TTS model and its processor", html)
 
     def test_generated_table_scroll_regions_are_keyboard_focusable(self):

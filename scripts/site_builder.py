@@ -560,7 +560,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
     if page_slug == "index.html":
         snapshot_id = "qwen3-tts-022e286b"
         source_path = "qwen_tts/inference/qwen3_tts_model.py"
-        start_line, end_line = 83, 92
+        start_line, end_line = 83, 87
         source_url = registry[snapshot_id].blob_url_template.format(
             path=source_path, start=start_line, end=end_line
         )
@@ -571,18 +571,18 @@ def render_page(page, navigation, evidence, search_documents) -> str:
             end_line=end_line,
         )
         excerpt = (
-            "def from_pretrained(\n"
-            "    cls,\n"
-            "    pretrained_model_name_or_path: str,\n"
-            "    **kwargs,\n"
-            ") -> Qwen3TTSModel:"
+            "    def from_pretrained(\n"
+            "        cls,\n"
+            "        pretrained_model_name_or_path: str,\n"
+            "        **kwargs,\n"
+            '    ) -> "Qwen3TTSModel":'
         )
         source_example = (
             '<div class="source-example" id="source">'
             '<div class="code-header"><span>官方装载入口（短摘录）</span>'
             '<div class="code-actions">'
             f'<a class="source-link print-url" {link_attributes} '
-            f'href="{_escape(source_url)}">固定源码 L83–L92 ↗</a>'
+            f'href="{_escape(source_url)}">固定源码 L83–L87 ↗</a>'
             '<button class="copy-source" type="button" '
             'data-copy-target="qwen-load-example">复制</button>'
             '<span class="copy-status" role="status" aria-live="polite"></span>'

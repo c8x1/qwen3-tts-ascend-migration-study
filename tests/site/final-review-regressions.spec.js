@@ -94,11 +94,17 @@ test('source block copies text and links to an immutable official source range',
   const source = page.locator('.source-link');
   await expect(source).toHaveAttribute(
     'href',
-    `https://github.com/QwenLM/Qwen3-TTS/blob/${SOURCE_COMMIT}/qwen_tts/inference/qwen3_tts_model.py#L83-L92`,
+    `https://github.com/QwenLM/Qwen3-TTS/blob/${SOURCE_COMMIT}/qwen_tts/inference/qwen3_tts_model.py#L83-L87`,
   );
   await page.locator('.copy-source').click();
   await expect(page.locator('.copy-status')).toHaveText('已复制');
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toContain('def from_pretrained');
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(
+    '    def from_pretrained(\n' +
+      '        cls,\n' +
+      '        pretrained_model_name_or_path: str,\n' +
+      '        **kwargs,\n' +
+      '    ) -> "Qwen3TTSModel":',
+  );
 
   await expect(page.getByRole('navigation', { name: '相邻章节' })).toBeVisible();
   await expect(page.getByRole('contentinfo')).toContainText('源码引用固定版本');
