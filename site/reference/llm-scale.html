@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="多节点例子不构成 TTS 证据。">
+  <title>LLM 多节点边界 · Qwen3-TTS × Ascend 910B</title>
+  <link rel="stylesheet" href="../assets/theme.css">
+  <link rel="stylesheet" href="../assets/layout.css">
+</head>
+<body id="top">
+  <header class="site-header">
+    <a class="brand" href="../index.html">Qwen3-TTS × Ascend <small>Migration Field Notes</small></a>
+    <div class="mobile-chapter-title" aria-label="当前章节">LLM 多节点边界</div>
+    <form id="site-search" class="search" role="search" action="../search.html" method="get">
+      <label><span class="sr-only">站内搜索</span><input name="q" type="search" aria-label="站内搜索" placeholder="搜索文件、类、配置项、证据编号"></label>
+      <button class="search-submit" type="submit">搜索</button>
+    </form>
+    <noscript><a class="search-fallback" href="#chapter-tree">无脚本模式：浏览章节索引</a></noscript>
+    <button class="search-enhancement" type="button" aria-controls="site-search" aria-expanded="false" aria-label="打开站内搜索">⌕</button>
+    <div class="revision">四个固定快照 · 静态知识站</div>
+  </header>
+  <div class="site-shell">
+    <div class="sidebar-controls">
+      <button id="toggle-left" class="sidebar-toggle left-toggle" type="button" aria-controls="chapter-nav" aria-expanded="true" aria-label="收起章节导航">‹</button>
+      <button id="toggle-right" class="sidebar-toggle right-toggle" type="button" aria-controls="evidence-rail" aria-expanded="true" aria-label="收起证据栏">›</button>
+    </div>
+    <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
+      <div class="rail-icons" role="group" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li><a data-page-link href="../index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a data-page-link href="../target/package-inference-api.html">2 · 包结构与推理 API</a></li><li><a data-page-link href="../target/model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a data-page-link href="../target/tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a data-page-link href="../target/tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a data-page-link href="../target/processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a data-page-link href="../target/sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a data-page-link href="../target/sft-training-loop.html">8 · SFT 训练循环</a></li><li><a data-page-link href="../target/optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a data-page-link href="../target/coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a data-page-link href="../indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a data-page-link href="../indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a data-page-link href="../search.html">13 · 全站搜索</a></li><li><a data-page-link href="mm-config.html">14 · MM 配置入口</a></li><li><a data-page-link href="mm-data.html">15 · MM 数据分派</a></li><li><a data-page-link href="mm-conversion.html">16 · MM 检查点转换</a></li><li><a data-page-link href="mm-training.html">17 · MM 训练边界</a></li><li><a data-page-link href="mm-npu.html">18 · MM NPU 开关</a></li><li><a data-page-link href="mm-checkpoint.html">19 · MM 保存状态</a></li><li><a data-page-link href="llm-launch.html">20 · LLM 启动形态</a></li><li><a data-page-link href="llm-parallel.html">21 · LLM 并行维度</a></li><li><a data-page-link href="llm-checkpoint.html">22 · LLM 恢复文档</a></li><li><a data-page-link class="active" aria-current="page" href="llm-scale.html">23 · LLM 多节点边界</a></li><li><a data-page-link href="moss-package.html">24 · MOSS 包边界</a></li><li><a data-page-link href="moss-model.html">25 · MOSS Delay 模型</a></li><li><a data-page-link href="moss-training.html">26 · MOSS 训练验证</a></li><li><a data-page-link href="../mapping/map-data.html">27 · 迁移：数据</a></li><li><a data-page-link href="../mapping/map-checkpoint.html">28 · 迁移：检查点</a></li><li><a data-page-link href="../mapping/map-distributed.html">29 · 迁移：分布式</a></li><li><a data-page-link href="../mapping/map-codec.html">30 · 迁移：Codec</a></li><li><a data-page-link href="../mapping/map-hardware.html">31 · 迁移：910B 验证</a></li></ul></div>
+      <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
+    </nav>
+    <main id="article-content">
+      <article>
+        <p class="breadcrumb">mindspeed-llm / 23</p>
+        <h1>LLM 多节点边界</h1>
+        <p class="lead">多节点例子不构成 TTS 证据。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>限制规模外推</li></ul></div><div><h2>前置知识</h2><ul><li>集群访问</li></ul></div></div>
+        <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
+
+        <section id="scale"><h2>规模</h2><p><span class="evidence-state" data-state="pending_hardware">状态：待真机验证</span> 观察：记录支持的 TTS adapter 在多节点上的启动和 loss。通过条件：有界作业完成并通过一致性检查。</p><ul class="source-refs"><li><a href="#evidence-REF-LLM-SCALE">证据 REF-LLM-SCALE</a></li></ul></section>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="prev" href="llm-checkpoint.html">← 上一页：LLM 恢复文档</a><a rel="next" href="moss-package.html">下一页：MOSS 包边界 →</a></nav>
+      </article>
+    </main>
+    <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
+      <div class="rail-icons" role="group" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#scale">规模</a></section><section id="evidence-REF-LLM-SCALE" class="rail-card evidence-card" data-rail-card>
+<h2>REF-LLM-SCALE</h2>
+<p data-rail-content><span class="evidence-state" data-state="pending_hardware" data-evidence-state="pending_hardware">状态：待真机验证</span></p>
+<p data-rail-content>Multi-node LLM example is not TTS runtime evidence.</p>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="mindspeed-llm-434baff7" data-source-path="examples/mcore/qwen3_moe/tune_qwen3_235b_a22b_4K_full_pack_A3_ptd.sh" data-start-line="11" data-end-line="16" href="https://github.com/Ascend/MindSpeed-LLM/blob/434baff794bd5594ebc9ed8a5b399110da9a44f0/examples/mcore/qwen3_moe/tune_qwen3_235b_a22b_4K_full_pack_A3_ptd.sh#L11-L16">固定源码 examples/mcore/qwen3_moe/tune_qwen3_235b_a22b_4K_full_pack_A3_ptd.sh · L11–L16 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-026</span>
+</section></div>
+      <button class="drawer-close" type="button" data-close-drawer="right">关闭证据栏</button>
+    </aside>
+  </div>
+  <div class="drawer-backdrop" hidden></div>
+  <footer class="site-footer"><p>Qwen3-TTS × Ascend 910B 学习站 · 源码引用固定版本，迁移结论需以真机复验为准。</p></footer>
+  <script type="module" src="../assets/app.js"></script>
+</body>
+</html>
