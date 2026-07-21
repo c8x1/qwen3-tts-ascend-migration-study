@@ -205,7 +205,15 @@ class ReferenceEvidenceContractTest(unittest.TestCase):
                 for evidence_id in block.get("evidence_ids", [])
             ]
             self.assertTrue(any(item.startswith("TGT-") for item in references))
-            self.assertTrue(any(item.startswith("REF-") for item in references))
+            reference_ids = [item for item in references if item.startswith("REF-")]
+            self.assertTrue(reference_ids)
+            self.assertTrue(all(
+                evidence[item].snapshot_id is not None
+                and evidence[item].path is not None
+                and evidence[item].start_line is not None
+                and evidence[item].end_line is not None
+                for item in reference_ids
+            ))
             pending = [
                 block for section in page["sections"] for block in section["blocks"]
                 if block.get("state") == "pending_hardware"
