@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["schema_version","evidence"],"properties":{"schema_version":{"const":1},"evidence":{"type":"array"}}}

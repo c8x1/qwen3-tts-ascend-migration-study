@@ -1,0 +1,1 @@
+{"type":"object","additionalProperties":false,"required":["surface","disposition","page","section","evidence_ids","reason"],"properties":{"surface":{"type":"string"},"disposition":{"enum":["mapped","excluded","pending"]},"page":{"type":"string"},"section":{"type":"string"},"evidence_ids":{"type":"string"},"reason":{"type":"string"}}}
