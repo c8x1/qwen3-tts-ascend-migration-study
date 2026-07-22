@@ -109,7 +109,7 @@ test('source block copies text and links to an immutable official source range',
   await expect(page.getByRole('navigation', { name: '相邻章节' })).toBeVisible();
   await expect(page.getByRole('contentinfo')).toContainText('源码引用固定版本');
   const next = page.getByRole('navigation', { name: '相邻章节' }).getByRole('link');
-  await expect(next).toHaveAttribute('href', 'target/package-inference-api.html');
+  await expect(next).toHaveAttribute('href', 'guide/migration-boundary.html');
 });
 
 test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
@@ -129,10 +129,10 @@ test('chapter tree exposes the complete ordered path and current page', async ({
   await expect(page.locator('.chapter-group-label')).toHaveText([
     '入门教程', '源码深读', '实施路线',
   ]);
-  await expect(links).toHaveCount(31);
+  await expect(links).toHaveCount(33);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
   await expect(links.first()).toContainText('Qwen3-TTS');
-  await expect(links.last()).toContainText('迁移：910B 验证');
+  await expect(links.last()).toContainText('实施路线总览');
 });
 
 test('without JavaScript the full flow and fallbacks remain readable while enhancements disappear', async ({ browser }) => {
@@ -146,7 +146,7 @@ test('without JavaScript the full flow and fallbacks remain readable while enhan
   await expect(page.locator('.search-enhancement')).toBeHidden();
   await expect(page.getByRole('searchbox', { name: '站内搜索' })).toBeVisible();
   await expect(page.getByRole('link', { name: '无脚本模式：浏览章节索引' })).toHaveAttribute('href', '#chapter-tree');
-  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(31);
+  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(33);
   await expect(page.getByRole('navigation', { name: '章节导航' })).toBeVisible();
   await expect(page.getByRole('main')).toBeVisible();
   await expect(page.getByRole('complementary', { name: '证据与页内目录' })).toBeVisible();

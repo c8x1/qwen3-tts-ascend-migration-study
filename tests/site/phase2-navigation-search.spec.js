@@ -5,7 +5,7 @@ test('all Phase 3 pages are reachable through chapter navigation', async ({ page
   await expect(page.locator('.chapter-group-label')).toHaveText([
     '入门教程', '源码深读', '实施路线',
   ]);
-  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(31);
+  await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(33);
 });
 
 test('previous and next links form a non-cyclic ordered path', async ({ page }) => {
