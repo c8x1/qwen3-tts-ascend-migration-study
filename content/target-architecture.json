@@ -5,14 +5,16 @@
       "slug": "target/package-inference-api.html",
       "title": "包结构与推理 API",
       "summary": "从发布包边界进入公开推理包装器，按固定源码顺序理解注册、装载与三类生成入口。",
-      "order": 2,
+      "order": 3,
       "group": "target-architecture",
       "objectives": [
         "区分源码仓、sdist 与模型运行所需外部材料的边界",
         "沿固定源码路径解释 Qwen3TTSModel.from_pretrained 的注册与装载顺序",
         "定位 Base、VoiceDesign 与 CustomVoice 三类公开包装器接口"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与自回归生成"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与自回归生成"
+      ],
       "sections": [
         {
           "id": "package-layout",
@@ -22,33 +24,92 @@
               "type": "paragraph",
               "text": "pyproject.toml 固定包元数据、Python 下限与运行依赖；qwen_tts/core/__init__.py 导出 12Hz 与 25Hz tokenizer 配置/模型类；根包导入模型与 tokenizer 包装器，但 __all__ 只列版本；python -m qwen_tts 会打印 CLI 入口提示。源码根的 Apache License 2.0 文本不自动覆盖权重、数据或其他材料。",
               "state": "verified",
-              "evidence_ids": ["TGT-PKG-001", "TGT-PKG-002", "TGT-PKG-003", "TGT-PKG-005", "TGT-PKG-006"]
+              "evidence_ids": [
+                "TGT-PKG-001",
+                "TGT-PKG-002",
+                "TGT-PKG-003",
+                "TGT-PKG-005",
+                "TGT-PKG-006"
+              ]
             },
             {
               "type": "paragraph",
               "text": "MANIFEST.in 对 sdist prune assets、examples 与 finetuning；这只描述源码分发包的裁剪规则，不等于源码仓中不存在 examples/finetuning。",
               "state": "verified",
-              "evidence_ids": ["TGT-PKG-004"]
+              "evidence_ids": [
+                "TGT-PKG-004"
+              ]
             },
             {
               "type": "table",
-              "headers": ["职责", "源码路径", "固定范围"],
+              "headers": [
+                "职责",
+                "源码路径",
+                "固定范围"
+              ],
               "rows": [
-                ["包元数据与依赖", "pyproject.toml", "L1–L45"],
-                ["tokenizer 类导出", "qwen_tts/core/__init__.py", "L16–L19"],
-                ["许可证文本", "LICENSE", "L1–L201"],
-                ["sdist 裁剪", "MANIFEST.in", "L1–L13"],
-                ["根包导入", "qwen_tts/__init__.py", "L17–L24"],
-                ["模块入口", "qwen_tts/__main__.py", "L16–L24"],
-                ["CLI 默认值与传参", "qwen_tts/cli/demo.py", "L91–L108, L605–L613"],
-                ["公开推理包装器", "qwen_tts/inference/qwen3_tts_model.py", "L83–L839"],
-                ["条件生成模型", "qwen_tts/core/models/modeling_qwen3_tts.py", "L2022–L2292"],
-                ["speech tokenizer 包装器", "qwen_tts/inference/qwen3_tts_tokenizer.py", "L44–L410"]
+                [
+                  "包元数据与依赖",
+                  "pyproject.toml",
+                  "L1–L45"
+                ],
+                [
+                  "tokenizer 类导出",
+                  "qwen_tts/core/__init__.py",
+                  "L16–L19"
+                ],
+                [
+                  "许可证文本",
+                  "LICENSE",
+                  "L1–L201"
+                ],
+                [
+                  "sdist 裁剪",
+                  "MANIFEST.in",
+                  "L1–L13"
+                ],
+                [
+                  "根包导入",
+                  "qwen_tts/__init__.py",
+                  "L17–L24"
+                ],
+                [
+                  "模块入口",
+                  "qwen_tts/__main__.py",
+                  "L16–L24"
+                ],
+                [
+                  "CLI 默认值与传参",
+                  "qwen_tts/cli/demo.py",
+                  "L91–L108, L605–L613"
+                ],
+                [
+                  "公开推理包装器",
+                  "qwen_tts/inference/qwen3_tts_model.py",
+                  "L83–L839"
+                ],
+                [
+                  "条件生成模型",
+                  "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "L2022–L2292"
+                ],
+                [
+                  "speech tokenizer 包装器",
+                  "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "L44–L410"
+                ]
               ]
             },
             {
               "type": "source_refs",
-              "evidence_ids": ["TGT-PKG-001", "TGT-PKG-002", "TGT-PKG-003", "TGT-PKG-004", "TGT-PKG-005", "TGT-PKG-006"]
+              "evidence_ids": [
+                "TGT-PKG-001",
+                "TGT-PKG-002",
+                "TGT-PKG-003",
+                "TGT-PKG-004",
+                "TGT-PKG-005",
+                "TGT-PKG-006"
+              ]
             }
           ]
         },
@@ -60,11 +121,17 @@
               "type": "paragraph",
               "text": "官方目标 CLI 的默认设备、dtype 与注意力实现分别是 cuda:0、BF16 与 FlashAttention-2（FA2），解析后的值会传入 from_pretrained。这些是目标项目面向 NVIDIA/CUDA 的默认值描述，不是设备迁移建议，也不是任何替代后端的映射结论。",
               "state": "verified",
-              "evidence_ids": ["TGT-CLI-001", "TGT-CLI-002"]
+              "evidence_ids": [
+                "TGT-CLI-001",
+                "TGT-CLI-002"
+              ]
             },
             {
               "type": "source_refs",
-              "evidence_ids": ["TGT-CLI-001", "TGT-CLI-002"]
+              "evidence_ids": [
+                "TGT-CLI-001",
+                "TGT-CLI-002"
+              ]
             }
           ]
         },
@@ -75,19 +142,54 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "公开入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.from_pretrained", "evidence_ids": ["TGT-API-001"]},
-                {"label": "注册配置", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "AutoConfig.register", "evidence_ids": ["TGT-API-001"]},
-                {"label": "装载模型", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "AutoModel.from_pretrained", "evidence_ids": ["TGT-API-001"]},
-                {"label": "装载处理器", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "AutoProcessor.from_pretrained", "evidence_ids": ["TGT-API-001"]}
+                {
+                  "label": "公开入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.from_pretrained",
+                  "evidence_ids": [
+                    "TGT-API-001"
+                  ]
+                },
+                {
+                  "label": "注册配置",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "AutoConfig.register",
+                  "evidence_ids": [
+                    "TGT-API-001"
+                  ]
+                },
+                {
+                  "label": "装载模型",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "AutoModel.from_pretrained",
+                  "evidence_ids": [
+                    "TGT-API-001"
+                  ]
+                },
+                {
+                  "label": "装载处理器",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "AutoProcessor.from_pretrained",
+                  "evidence_ids": [
+                    "TGT-API-001"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "静态调用顺序是先进入公开工厂，再注册配置/模型/processor 类型，随后分别装载模型与 processor；它说明源码顺序，不证明本机权重或依赖已经可用。",
               "state": "verified",
-              "evidence_ids": ["TGT-API-001"]
+              "evidence_ids": [
+                "TGT-API-001"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-API-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-API-001"
+              ]
+            }
           ]
         },
         {
@@ -97,19 +199,58 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "构造 voice-clone prompt", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.create_voice_clone_prompt", "evidence_ids": ["TGT-API-002"]},
-                {"label": "Base 生成入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.generate_voice_clone", "evidence_ids": ["TGT-API-002"]},
-                {"label": "条件模型生成", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "Qwen3TTSForConditionalGeneration.generate", "evidence_ids": ["TGT-API-002", "TGT-MODEL-003"]},
-                {"label": "speech tokenizer 解码", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer.decode", "evidence_ids": ["TGT-API-002", "TGT-PROC-002"]}
+                {
+                  "label": "构造 voice-clone prompt",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.create_voice_clone_prompt",
+                  "evidence_ids": [
+                    "TGT-API-002"
+                  ]
+                },
+                {
+                  "label": "Base 生成入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.generate_voice_clone",
+                  "evidence_ids": [
+                    "TGT-API-002"
+                  ]
+                },
+                {
+                  "label": "条件模型生成",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "Qwen3TTSForConditionalGeneration.generate",
+                  "evidence_ids": [
+                    "TGT-API-002",
+                    "TGT-MODEL-003"
+                  ]
+                },
+                {
+                  "label": "speech tokenizer 解码",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer.decode",
+                  "evidence_ids": [
+                    "TGT-API-002",
+                    "TGT-PROC-002"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "create_voice_clone_prompt 接收参考音频、可选参考文本与 x_vector_only_mode；generate_voice_clone 接收待合成 text/language 以及 prompt 或参考输入，随后调用条件模型 generate，再把 audio_codes 交给 speech tokenizer decode。这里只记录公开包装器契约，不把外部音频、权重或执行结果视为已验证。",
               "state": "verified",
-              "evidence_ids": ["TGT-API-002", "TGT-MODEL-003", "TGT-PROC-002"]
+              "evidence_ids": [
+                "TGT-API-002",
+                "TGT-MODEL-003",
+                "TGT-PROC-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-API-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-API-002"
+              ]
+            }
           ]
         },
         {
@@ -119,18 +260,50 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "自然语言风格指令", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.generate_voice_design", "evidence_ids": ["TGT-API-003"]},
-                {"label": "条件模型生成", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "Qwen3TTSForConditionalGeneration.generate", "evidence_ids": ["TGT-API-003", "TGT-MODEL-003"]},
-                {"label": "speech tokenizer 解码", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer.decode", "evidence_ids": ["TGT-API-003", "TGT-PROC-002"]}
+                {
+                  "label": "自然语言风格指令",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.generate_voice_design",
+                  "evidence_ids": [
+                    "TGT-API-003"
+                  ]
+                },
+                {
+                  "label": "条件模型生成",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "Qwen3TTSForConditionalGeneration.generate",
+                  "evidence_ids": [
+                    "TGT-API-003",
+                    "TGT-MODEL-003"
+                  ]
+                },
+                {
+                  "label": "speech tokenizer 解码",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer.decode",
+                  "evidence_ids": [
+                    "TGT-API-003",
+                    "TGT-PROC-002"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "generate_voice_design 的主要输入是 text、language 与描述目标声音/风格的 instruct；它不构造参考音频 prompt，而是把 instruct_ids 传给条件模型 generate，再解码 audio_codes。",
               "state": "verified",
-              "evidence_ids": ["TGT-API-003", "TGT-MODEL-003", "TGT-PROC-002"]
+              "evidence_ids": [
+                "TGT-API-003",
+                "TGT-MODEL-003",
+                "TGT-PROC-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-API-003"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-API-003"
+              ]
+            }
           ]
         },
         {
@@ -140,18 +313,50 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "预定义 speaker 入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.generate_custom_voice", "evidence_ids": ["TGT-API-003"]},
-                {"label": "条件模型生成", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "Qwen3TTSForConditionalGeneration.generate", "evidence_ids": ["TGT-API-003", "TGT-MODEL-003"]},
-                {"label": "speech tokenizer 解码", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer.decode", "evidence_ids": ["TGT-API-003", "TGT-PROC-002"]}
+                {
+                  "label": "预定义 speaker 入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.generate_custom_voice",
+                  "evidence_ids": [
+                    "TGT-API-003"
+                  ]
+                },
+                {
+                  "label": "条件模型生成",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "Qwen3TTSForConditionalGeneration.generate",
+                  "evidence_ids": [
+                    "TGT-API-003",
+                    "TGT-MODEL-003"
+                  ]
+                },
+                {
+                  "label": "speech tokenizer 解码",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer.decode",
+                  "evidence_ids": [
+                    "TGT-API-003",
+                    "TGT-PROC-002"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "generate_custom_voice 的主要输入是 text、language、预定义 speaker 名称与可选 instruct；它先校验 speaker/language，再把 speakers 与 instruct_ids 传给条件模型 generate。它与以自然语言描述声音的 VoiceDesign 不是同一参数契约。",
               "state": "verified",
-              "evidence_ids": ["TGT-API-003", "TGT-MODEL-003", "TGT-PROC-002"]
+              "evidence_ids": [
+                "TGT-API-003",
+                "TGT-MODEL-003",
+                "TGT-PROC-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-API-003"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-API-003"
+              ]
+            }
           ]
         },
         {
@@ -162,24 +367,29 @@
               "type": "paragraph",
               "text": "本页是固定源码的静态入口图。实际推理还需要外部权重与音频；安装得到的 sdist 可能省略 assets、examples 与 finetuning，因此不能用安装包目录反推源码仓内容。",
               "state": "project_claim",
-              "evidence_ids": ["TGT-PKG-004"]
+              "evidence_ids": [
+                "TGT-PKG-004"
+              ]
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "target/model-architecture.html",
       "title": "复合模型架构与生成流",
       "summary": "拆开复合配置、说话人编码器、Talker、残差码本预测器与目标源码中的 FP32 精度岛。",
-      "order": 3,
+      "order": 4,
       "group": "target-architecture",
       "objectives": [
         "解释复合配置如何嵌套 speaker、Talker 与 code predictor",
         "区分 Talker 的 codec-0 输出与由 num_code_groups 决定的残差码本预测",
         "定位 RoPE、RMSNorm 与 eager attention 的 FP32 计算边界"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与自回归生成"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与自回归生成"
+      ],
       "sections": [
         {
           "id": "composite-config",
@@ -189,19 +399,46 @@
               "type": "paragraph",
               "text": "Qwen3-TTS 配置把 speaker encoder、code predictor、Talker 与顶层条件生成配置嵌套在一起；配置树是后续源码导航的结构入口。",
               "state": "verified",
-              "evidence_ids": ["TGT-CONFIG-001"]
+              "evidence_ids": [
+                "TGT-CONFIG-001"
+              ]
             },
             {
               "type": "table",
-              "headers": ["组件", "源码路径", "固定范围"],
+              "headers": [
+                "组件",
+                "源码路径",
+                "固定范围"
+              ],
               "rows": [
-                ["复合配置", "qwen_tts/core/models/configuration_qwen3_tts.py", "L22–L499"],
-                ["Speaker/Talker/条件生成", "qwen_tts/core/models/modeling_qwen3_tts.py", "L311–L2292"],
-                ["speech tokenizer 资源装载", "qwen_tts/core/models/modeling_qwen3_tts.py", "L1891–L1936"],
-                ["公开包装器装载与生成", "qwen_tts/inference/qwen3_tts_model.py", "L83–L839"]
+                [
+                  "复合配置",
+                  "qwen_tts/core/models/configuration_qwen3_tts.py",
+                  "L22–L499"
+                ],
+                [
+                  "Speaker/Talker/条件生成",
+                  "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "L311–L2292"
+                ],
+                [
+                  "speech tokenizer 资源装载",
+                  "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "L1891–L1936"
+                ],
+                [
+                  "公开包装器装载与生成",
+                  "qwen_tts/inference/qwen3_tts_model.py",
+                  "L83–L839"
+                ]
               ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-CONFIG-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-CONFIG-001"
+              ]
+            }
           ]
         },
         {
@@ -212,9 +449,18 @@
               "type": "paragraph",
               "text": "Qwen3TTSSpeakerEncoder 是 ECAPA 风格说话人编码器。配置类的 extraction contract 默认 sample_rate=24000、mel_dim=128，模型 forward 产出 speaker embedding；这里组合的是配置与静态张量契约，不声称音频已在本机执行。",
               "state": "verified",
-              "evidence_ids": ["TGT-MODEL-001", "TGT-CONFIG-001"]
+              "evidence_ids": [
+                "TGT-MODEL-001",
+                "TGT-CONFIG-001"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-MODEL-001", "TGT-CONFIG-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-MODEL-001",
+                "TGT-CONFIG-001"
+              ]
+            }
           ]
         },
         {
@@ -225,9 +471,16 @@
               "type": "paragraph",
               "text": "Qwen3TTSTalkerForConditionalGeneration 把文本与已有 codec 条件送入 decoder，并由 LM head 预测 codec-0 logits。codec-0 是 Talker 的主序列输出，不能与后续残差码本组混为一谈。",
               "state": "verified",
-              "evidence_ids": ["TGT-MODEL-002"]
+              "evidence_ids": [
+                "TGT-MODEL-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-MODEL-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-MODEL-002"
+              ]
+            }
           ]
         },
         {
@@ -238,15 +491,27 @@
               "type": "paragraph",
               "text": "训练 helper forward_sub_talker_finetune 读取 Talker hidden state 与 codec_ids，构造子 Talker 输入后调用 code_predictor.forward_finetune，并返回 logits 与 residual-codebook loss；它不属于 runtime inference chain。",
               "state": "verified",
-              "evidence_ids": ["TGT-MODEL-004", "TGT-MODEL-002"]
+              "evidence_ids": [
+                "TGT-MODEL-004",
+                "TGT-MODEL-002"
+              ]
             },
             {
               "type": "paragraph",
               "text": "静态公式是 residual groups = num_code_groups - 1；配置类默认值为 32，但实际发布 checkpoint 配置 pending，当前固定 evidence 没有锁定其真实 num_code_groups，因此不把默认值换算成发布模型结论。",
               "state": "inference",
-              "evidence_ids": ["TGT-CONFIG-001", "TGT-MODEL-002"]
+              "evidence_ids": [
+                "TGT-CONFIG-001",
+                "TGT-MODEL-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-MODEL-004", "TGT-MODEL-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-MODEL-004",
+                "TGT-MODEL-002"
+              ]
+            }
           ]
         },
         {
@@ -257,9 +522,20 @@
               "type": "paragraph",
               "text": "目标模型源码中，Talker RoPE 在关闭 autocast 后用 FP32 计算再恢复输入 dtype；RMSNorm 的方差用 FP32；eager attention 的 softmax 用 FP32 再转回 query dtype。这些是官方目标实现的局部精度范围，不是迁移映射。",
               "state": "verified",
-              "evidence_ids": ["TGT-MODEL-005", "TGT-MODEL-006", "TGT-MODEL-007"]
+              "evidence_ids": [
+                "TGT-MODEL-005",
+                "TGT-MODEL-006",
+                "TGT-MODEL-007"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-MODEL-005", "TGT-MODEL-006", "TGT-MODEL-007"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-MODEL-005",
+                "TGT-MODEL-006",
+                "TGT-MODEL-007"
+              ]
+            }
           ]
         },
         {
@@ -269,29 +545,112 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "包装器装载入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.from_pretrained", "evidence_ids": ["TGT-API-001"]},
-                {"label": "条件模型装载", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "Qwen3TTSForConditionalGeneration.from_pretrained", "evidence_ids": ["TGT-TOK25-011"]},
-                {"label": "speech tokenizer 资源", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "speech_tokenizer/*", "evidence_ids": ["TGT-TOK25-011"]},
-                {"label": "生成配置资源", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "generation_config.json", "evidence_ids": ["TGT-TOK25-011"]}
+                {
+                  "label": "包装器装载入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.from_pretrained",
+                  "evidence_ids": [
+                    "TGT-API-001"
+                  ]
+                },
+                {
+                  "label": "条件模型装载",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "Qwen3TTSForConditionalGeneration.from_pretrained",
+                  "evidence_ids": [
+                    "TGT-TOK25-011"
+                  ]
+                },
+                {
+                  "label": "speech tokenizer 资源",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "speech_tokenizer/*",
+                  "evidence_ids": [
+                    "TGT-TOK25-011"
+                  ]
+                },
+                {
+                  "label": "生成配置资源",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "generation_config.json",
+                  "evidence_ids": [
+                    "TGT-TOK25-011"
+                  ]
+                }
               ]
             },
             {
               "type": "call_chain",
               "items": [
-                {"label": "public wrapper API", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.generate_voice_clone / generate_voice_design / generate_custom_voice", "evidence_ids": ["TGT-API-002", "TGT-API-003"]},
-                {"label": "条件生成入口", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "Qwen3TTSForConditionalGeneration.generate", "evidence_ids": ["TGT-MODEL-003"]},
-                {"label": "Talker runtime", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "self.talker.generate / Qwen3TTSTalkerForConditionalGeneration.forward", "evidence_ids": ["TGT-MODEL-003", "TGT-MODEL-002"]},
-                {"label": "code predictor runtime", "path": "qwen_tts/core/models/modeling_qwen3_tts.py", "symbol": "self.code_predictor.generate", "evidence_ids": ["TGT-MODEL-002"]},
-                {"label": "audio_codes 解码", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSTokenizer.decode / self.model.speech_tokenizer.decode", "evidence_ids": ["TGT-API-002", "TGT-API-003"]}
+                {
+                  "label": "public wrapper API",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.generate_voice_clone / generate_voice_design / generate_custom_voice",
+                  "evidence_ids": [
+                    "TGT-API-002",
+                    "TGT-API-003"
+                  ]
+                },
+                {
+                  "label": "条件生成入口",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "Qwen3TTSForConditionalGeneration.generate",
+                  "evidence_ids": [
+                    "TGT-MODEL-003"
+                  ]
+                },
+                {
+                  "label": "Talker runtime",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "self.talker.generate / Qwen3TTSTalkerForConditionalGeneration.forward",
+                  "evidence_ids": [
+                    "TGT-MODEL-003",
+                    "TGT-MODEL-002"
+                  ]
+                },
+                {
+                  "label": "code predictor runtime",
+                  "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "symbol": "self.code_predictor.generate",
+                  "evidence_ids": [
+                    "TGT-MODEL-002"
+                  ]
+                },
+                {
+                  "label": "audio_codes 解码",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSTokenizer.decode / self.model.speech_tokenizer.decode",
+                  "evidence_ids": [
+                    "TGT-API-002",
+                    "TGT-API-003"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "第一条链只描述 load-time 资源解析；第二条链才描述 runtime inference。训练 helper forward_sub_talker_finetune 不进入运行期生成链。源码与资源路径存在不等于外部资源已经取得或执行。",
               "state": "verified",
-              "evidence_ids": ["TGT-API-001", "TGT-API-002", "TGT-API-003", "TGT-MODEL-002", "TGT-MODEL-003", "TGT-TOK25-011"]
+              "evidence_ids": [
+                "TGT-API-001",
+                "TGT-API-002",
+                "TGT-API-003",
+                "TGT-MODEL-002",
+                "TGT-MODEL-003",
+                "TGT-TOK25-011"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-API-001", "TGT-API-002", "TGT-API-003", "TGT-MODEL-002", "TGT-MODEL-003", "TGT-TOK25-011"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-API-001",
+                "TGT-API-002",
+                "TGT-API-003",
+                "TGT-MODEL-002",
+                "TGT-MODEL-003",
+                "TGT-TOK25-011"
+              ]
+            }
           ]
         },
         {
@@ -306,20 +665,23 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "target/tokenizer-12hz.html",
       "title": "12Hz Tokenizer 契约",
       "summary": "从包注册、配置常量与 encode/decode 形状理解 12Hz tokenizer，并把 12.5 FPS 算术推断单独标注。",
-      "order": 4,
+      "order": 5,
       "group": "target-architecture",
       "objectives": [
         "定位 Qwen3TTSTokenizerV2Model 的公开导出与 encode/decode 边界",
         "区分已核验的 24kHz/1920/16 配置与 12.5 FPS 算术推断",
         "说明 split RVQ 与 causal/chunked decoder 的静态职责"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与自回归生成"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与自回归生成"
+      ],
       "sections": [
         {
           "id": "package-tokenizer-registry",
@@ -329,18 +691,41 @@
               "type": "paragraph",
               "text": "qwen_tts.core 同时导出 12Hz/25Hz tokenizer 配置与模型类；本页沿 Qwen3TTSTokenizerV2Model 分支继续阅读。",
               "state": "verified",
-              "evidence_ids": ["TGT-PKG-002"]
+              "evidence_ids": [
+                "TGT-PKG-002"
+              ]
             },
             {
               "type": "table",
-              "headers": ["职责", "源码路径", "固定范围"],
+              "headers": [
+                "职责",
+                "源码路径",
+                "固定范围"
+              ],
               "rows": [
-                ["包导出", "qwen_tts/core/__init__.py", "L16–L19"],
-                ["12Hz 配置", "qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py", "L137–L169"],
-                ["12Hz encode/decode 与 RVQ", "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "L780–L1024"]
+                [
+                  "包导出",
+                  "qwen_tts/core/__init__.py",
+                  "L16–L19"
+                ],
+                [
+                  "12Hz 配置",
+                  "qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py",
+                  "L137–L169"
+                ],
+                [
+                  "12Hz encode/decode 与 RVQ",
+                  "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "L780–L1024"
+                ]
               ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-PKG-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-PKG-002"
+              ]
+            }
           ]
         },
         {
@@ -351,9 +736,16 @@
               "type": "paragraph",
               "text": "配置固定 input sample rate 为 24kHz、encode stride 为 1920 samples，并设置 16 个有效 quantizers；这三个值是源码中的已核验静态配置。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK12-002"]
+              "evidence_ids": [
+                "TGT-TOK12-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK12-002"
+              ]
+            }
           ]
         },
         {
@@ -364,9 +756,16 @@
               "type": "paragraph",
               "text": "推断：由已核验配置做算术 24000/1920=12.5 FPS。12.5 FPS 是从 sample rate 与 stride 推导的帧率，不把产品名中的“12Hz”改写成另一个已核验常量。",
               "state": "inference",
-              "evidence_ids": ["TGT-TOK12-003"]
+              "evidence_ids": [
+                "TGT-TOK12-003"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-003"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK12-003"
+              ]
+            }
           ]
         },
         {
@@ -376,23 +775,47 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "12Hz encode 分支入口", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "Qwen3TTSTokenizerV2Model.encode", "evidence_ids": ["TGT-TOK12-001"]},
-                {"label": "Mimi encoder 分支", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "self.encoder.encode", "evidence_ids": ["TGT-TOK12-001"]}
+                {
+                  "label": "12Hz encode 分支入口",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "Qwen3TTSTokenizerV2Model.encode",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                },
+                {
+                  "label": "Mimi encoder 分支",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "self.encoder.encode",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "Qwen3TTSTokenizerV2Model.encode 接收批量波形与 padding mask，实际调用 self.encoder.encode 后裁剪并返回逐样本 audio_codes；encode 分支不经过 SplitResidualVectorQuantizer。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK12-001"]
+              "evidence_ids": [
+                "TGT-TOK12-001"
+              ]
             },
             {
               "type": "paragraph",
               "text": "结合模型返回的 (T,num_quantizers) 与配置默认 16 个有效 quantizers，单样本 (T,16) 是默认组合下的 shape 推断。",
               "state": "inference",
-              "evidence_ids": ["TGT-TOK12-001", "TGT-TOK12-002"]
+              "evidence_ids": [
+                "TGT-TOK12-001",
+                "TGT-TOK12-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK12-001"
+              ]
+            }
           ]
         },
         {
@@ -403,9 +826,16 @@
               "type": "paragraph",
               "text": "SplitResidualVectorQuantizer 把首个语义 quantizer 与其余声学 quantizers 分开，并在 decode 时将两部分量化表示相加。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK12-001"]
+              "evidence_ids": [
+                "TGT-TOK12-001"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK12-001"
+              ]
+            }
           ]
         },
         {
@@ -415,19 +845,56 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "12Hz decode 分支入口", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "Qwen3TTSTokenizerV2Model.decode", "evidence_ids": ["TGT-TOK12-001"]},
-                {"label": "分块解码", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "Qwen3TTSTokenizerV2Decoder.chunked_decode", "evidence_ids": ["TGT-TOK12-001"]},
-                {"label": "decoder forward", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "Qwen3TTSTokenizerV2Decoder.forward", "evidence_ids": ["TGT-TOK12-001"]},
-                {"label": "Split RVQ decode", "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py", "symbol": "SplitResidualVectorQuantizer.decode", "evidence_ids": ["TGT-TOK12-001"]}
+                {
+                  "label": "12Hz decode 分支入口",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "Qwen3TTSTokenizerV2Model.decode",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                },
+                {
+                  "label": "分块解码",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "Qwen3TTSTokenizerV2Decoder.chunked_decode",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                },
+                {
+                  "label": "decoder forward",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "Qwen3TTSTokenizerV2Decoder.forward",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                },
+                {
+                  "label": "Split RVQ decode",
+                  "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+                  "symbol": "SplitResidualVectorQuantizer.decode",
+                  "evidence_ids": [
+                    "TGT-TOK12-001"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "decode 接收批量 audio_codes；结合模型的 (B,T,num_quantizers) 输入契约与配置默认 16 个有效 quantizers，(B,T,16) 是默认组合下的 shape 推断。代码经转置进入 causal/chunked decoder，再按有效长度与 upsample rate 截取逐样本波形；这不是音质或时延结论。",
               "state": "inference",
-              "evidence_ids": ["TGT-TOK12-001", "TGT-TOK12-002"]
+              "evidence_ids": [
+                "TGT-TOK12-001",
+                "TGT-TOK12-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK12-001", "TGT-TOK12-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK12-001",
+                "TGT-TOK12-002"
+              ]
+            }
           ]
         },
         {
@@ -442,20 +909,23 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "target/tokenizer-25hz.html",
       "title": "25Hz Tokenizer 静态依赖图",
       "summary": "逐文件拆解 25Hz tokenizer 的编码、VQ、Whisper attention、DiT 与 BigVGAN，同时保留公开 checkpoint 的 pending_hardware 边界。",
-      "order": 5,
+      "order": 6,
       "group": "target-architecture",
       "objectives": [
         "沿固定路径解释 encoder、VQ 与 waveform decoder 的静态组合",
         "分别定位 CAMPPlus、SoX、ONNX Runtime、Kaldi 与 Whisper attention 依赖",
         "区分已证实的源码事实和公开 checkpoint 可执行性的 unknown 状态"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与自回归生成"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与自回归生成"
+      ],
       "sections": [
         {
           "id": "asset-inventory",
@@ -465,21 +935,58 @@
               "type": "paragraph",
               "text": "待真机验证：公开可执行性 unknown。官方源码、报告与 collections 没有建立一个固定的公开可执行 25Hz checkpoint，因此源码类存在不能替代 checkpoint 身份与可执行性验证。",
               "state": "pending_hardware",
-              "evidence_ids": ["TGT-TOK25-002", "TGT-TOK25-014"]
+              "evidence_ids": [
+                "TGT-TOK25-002",
+                "TGT-TOK25-014"
+              ]
             },
             {
               "type": "table",
-              "headers": ["组件", "源码路径", "固定范围"],
+              "headers": [
+                "组件",
+                "源码路径",
+                "固定范围"
+              ],
               "rows": [
-                ["复合 tokenizer", "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "L996–L1526"],
-                ["Speech VQ 依赖", "qwen_tts/core/tokenizer_25hz/vq/speech_vq.py", "L16–L150"],
-                ["Whisper attention", "qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py", "L29–L191"],
-                ["VQ 核心", "qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "L113–L521"],
-                ["Mel filter 资产", "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz", "binary / 无行号"],
-                ["主模型资源装载", "qwen_tts/core/models/modeling_qwen3_tts.py", "L1891–L1936"]
+                [
+                  "复合 tokenizer",
+                  "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "L996–L1526"
+                ],
+                [
+                  "Speech VQ 依赖",
+                  "qwen_tts/core/tokenizer_25hz/vq/speech_vq.py",
+                  "L16–L150"
+                ],
+                [
+                  "Whisper attention",
+                  "qwen_tts/core/tokenizer_25hz/vq/whisper_encoder.py",
+                  "L29–L191"
+                ],
+                [
+                  "VQ 核心",
+                  "qwen_tts/core/tokenizer_25hz/vq/core_vq.py",
+                  "L113–L521"
+                ],
+                [
+                  "Mel filter 资产",
+                  "qwen_tts/core/tokenizer_25hz/vq/assets/mel_filters.npz",
+                  "binary / 无行号"
+                ],
+                [
+                  "主模型资源装载",
+                  "qwen_tts/core/models/modeling_qwen3_tts.py",
+                  "L1891–L1936"
+                ]
               ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-002", "TGT-TOK25-014"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-002",
+                "TGT-TOK25-014"
+              ]
+            }
           ]
         },
         {
@@ -489,19 +996,57 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "25Hz encode 分支入口", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Model.encode", "evidence_ids": ["TGT-TOK25-013"]},
-                {"label": "编码器量化分支", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Encoder.quantize_speech", "evidence_ids": ["TGT-TOK25-012", "TGT-TOK25-013"]},
-                {"label": "波形转 mel 分支", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Encoder.speech2mel", "evidence_ids": ["TGT-TOK25-012"]},
-                {"label": "mel 转 code 分支", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Encoder.mel2code", "evidence_ids": ["TGT-TOK25-012"]}
+                {
+                  "label": "25Hz encode 分支入口",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Model.encode",
+                  "evidence_ids": [
+                    "TGT-TOK25-013"
+                  ]
+                },
+                {
+                  "label": "编码器量化分支",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Encoder.quantize_speech",
+                  "evidence_ids": [
+                    "TGT-TOK25-012",
+                    "TGT-TOK25-013"
+                  ]
+                },
+                {
+                  "label": "波形转 mel 分支",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Encoder.speech2mel",
+                  "evidence_ids": [
+                    "TGT-TOK25-012"
+                  ]
+                },
+                {
+                  "label": "mel 转 code 分支",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Encoder.mel2code",
+                  "evidence_ids": [
+                    "TGT-TOK25-012"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "已证实：静态依赖与源码路径。Qwen3TTSTokenizerV1Model.encode 调 encoder.quantize_speech；encoder 内部先 speech2mel，再 mel2code，并另行抽取 x-vector/ref-mel。这里仅描述 encode branch，不把它与 decoder 伪装为一条直接调用链。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-012", "TGT-TOK25-013"]
+              "evidence_ids": [
+                "TGT-TOK25-012",
+                "TGT-TOK25-013"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-012", "TGT-TOK25-013"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-012",
+                "TGT-TOK25-013"
+              ]
+            }
           ]
         },
         {
@@ -512,9 +1057,16 @@
               "type": "paragraph",
               "text": "Qwen3TTSTokenizerV1Model.from_pretrained 会解析 campplus.onnx 路径并装载它；这是固定源码中的资产依赖，不证明对应文件在任意外部 checkpoint 中都存在。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-003"]
+              "evidence_ids": [
+                "TGT-TOK25-003"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-003"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-003"
+              ]
+            }
           ]
         },
         {
@@ -525,9 +1077,18 @@
               "type": "paragraph",
               "text": "speech_vq.py 直接导入 SoX、ONNX Runtime、Kaldi compliance、VQ 与 Whisper 模块；x-vector 提取静态路径指定 ONNX CPUExecutionProvider，并包含 SoX 归一化与 Kaldi fbank。这里逐文件归属，不把所有 VQ 文件笼统归到主模型证据。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-004", "TGT-TOK25-005"]
+              "evidence_ids": [
+                "TGT-TOK25-004",
+                "TGT-TOK25-005"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-004", "TGT-TOK25-005"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-004",
+                "TGT-TOK25-005"
+              ]
+            }
           ]
         },
         {
@@ -538,9 +1099,18 @@
               "type": "paragraph",
               "text": "whisper_encoder.py 对 flash-attn 导入提供手写 PyTorch fallback；当 flash-attn 缺失或 dtype 不是 FP16/BF16 时，attention 进入该手写路径。此处只描述目标源码的分支条件。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-006", "TGT-TOK25-007"]
+              "evidence_ids": [
+                "TGT-TOK25-006",
+                "TGT-TOK25-007"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-006", "TGT-TOK25-007"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-006",
+                "TGT-TOK25-007"
+              ]
+            }
           ]
         },
         {
@@ -550,22 +1120,45 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "VQ encode 独立分支", "path": "qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "symbol": "DistributedGroupResidualVectorQuantization.encode", "evidence_ids": ["TGT-TOK25-010"]}
+                {
+                  "label": "VQ encode 独立分支",
+                  "path": "qwen_tts/core/tokenizer_25hz/vq/core_vq.py",
+                  "symbol": "DistributedGroupResidualVectorQuantization.encode",
+                  "evidence_ids": [
+                    "TGT-TOK25-010"
+                  ]
+                }
               ]
             },
             {
               "type": "call_chain",
               "items": [
-                {"label": "VQ decode 独立分支", "path": "qwen_tts/core/tokenizer_25hz/vq/core_vq.py", "symbol": "DistributedGroupResidualVectorQuantization.decode", "evidence_ids": ["TGT-TOK25-010"]}
+                {
+                  "label": "VQ decode 独立分支",
+                  "path": "qwen_tts/core/tokenizer_25hz/vq/core_vq.py",
+                  "symbol": "DistributedGroupResidualVectorQuantization.decode",
+                  "evidence_ids": [
+                    "TGT-TOK25-010"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "core_vq.py 分别给出 Euclidean codebook 的 quantize/dequantize 与 residual/group residual VQ 的 encode/decode。上面的 encode 与 decode 是两条独立 API branch，不表示 encode 之后在同一运行路径立即调用 decode。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-009", "TGT-TOK25-010"]
+              "evidence_ids": [
+                "TGT-TOK25-009",
+                "TGT-TOK25-010"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-009", "TGT-TOK25-010"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-009",
+                "TGT-TOK25-010"
+              ]
+            }
           ]
         },
         {
@@ -575,19 +1168,55 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "25Hz decode 分支入口", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Model.decode", "evidence_ids": ["TGT-TOK25-013"]},
-                {"label": "decoder forward", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1Decoder.forward", "evidence_ids": ["TGT-TOK25-001", "TGT-TOK25-013"]},
-                {"label": "DiT mel sampling", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1DecoderDiTModel.sample", "evidence_ids": ["TGT-TOK25-001"]},
-                {"label": "BigVGAN waveform", "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py", "symbol": "Qwen3TTSTokenizerV1DecoderBigVGANModel.forward", "evidence_ids": ["TGT-TOK25-001"]}
+                {
+                  "label": "25Hz decode 分支入口",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Model.decode",
+                  "evidence_ids": [
+                    "TGT-TOK25-013"
+                  ]
+                },
+                {
+                  "label": "decoder forward",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1Decoder.forward",
+                  "evidence_ids": [
+                    "TGT-TOK25-001",
+                    "TGT-TOK25-013"
+                  ]
+                },
+                {
+                  "label": "DiT mel sampling",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1DecoderDiTModel.sample",
+                  "evidence_ids": [
+                    "TGT-TOK25-001"
+                  ]
+                },
+                {
+                  "label": "BigVGAN waveform",
+                  "path": "qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py",
+                  "symbol": "Qwen3TTSTokenizerV1DecoderBigVGANModel.forward",
+                  "evidence_ids": [
+                    "TGT-TOK25-001"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "25Hz decode branch 从 Qwen3TTSTokenizerV1Model.decode 进入 decoder.forward，先由 DiT sample 生成 mel，再由 BigVGAN forward 生成 waveform。它与 encode/VQ branch 分开陈述；静态路径不等于已取得参数或已生成音频。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-001"]
+              "evidence_ids": [
+                "TGT-TOK25-001"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-001"
+              ]
+            }
           ]
         },
         {
@@ -598,9 +1227,16 @@
               "type": "paragraph",
               "text": "目标 tokenizer 源码在 FP32 decoder 场景覆盖 FA2/eager 选择并转向 SDPA fallback；这是一段目标实现的精度/attention 分支，不是迁移建议。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-008"]
+              "evidence_ids": [
+                "TGT-TOK25-008"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-008"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-008"
+              ]
+            }
           ]
         },
         {
@@ -611,9 +1247,16 @@
               "type": "paragraph",
               "text": "Qwen3TTSForConditionalGeneration.from_pretrained 的固定范围装载 speech_tokenizer/*、tokenizer config 与 generation_config.json；该证据只属于主模型资源接线。",
               "state": "verified",
-              "evidence_ids": ["TGT-TOK25-011"]
+              "evidence_ids": [
+                "TGT-TOK25-011"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-TOK25-011"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-TOK25-011"
+              ]
+            }
           ]
         },
         {
@@ -624,24 +1267,29 @@
               "type": "paragraph",
               "text": "已证实：静态依赖与源码路径。待真机验证：公开可执行性 unknown。前者由逐文件证据支撑，后者保留 pending_hardware；二者不得合并为运行结论。",
               "state": "pending_hardware",
-              "evidence_ids": ["TGT-TOK25-002"]
+              "evidence_ids": [
+                "TGT-TOK25-002"
+              ]
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "target/processor-contracts.html",
       "title": "Processor 输入与提示词契约",
       "summary": "连接文本 Processor 与音频 tokenizer wrapper，明确输入归一化、shape/sample-rate 元数据以及 x-vector-only 与 ICL 的差异。",
-      "order": 6,
+      "order": 7,
       "group": "target-architecture",
       "objectives": [
         "解释 Qwen3TTSProcessor 如何产生 Qwen tokenizer/ChatML 的 BatchFeature",
         "追踪 URL、路径、base64 与数组音频到 encode/decode 的归一化顺序",
         "区分 x-vector-only 与 ICL text+audio 提示词契约而不作运行声明"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与自回归生成"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与自回归生成"
+      ],
       "sections": [
         {
           "id": "text-contract",
@@ -650,27 +1298,71 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "ChatML 文本分支", "path": "qwen_tts/core/models/processing_qwen3_tts.py", "symbol": "Qwen3TTSProcessor.apply_chat_template", "evidence_ids": ["TGT-PROC-001"]},
-                {"label": "文本 tokenizer 分支", "path": "qwen_tts/core/models/processing_qwen3_tts.py", "symbol": "Qwen3TTSProcessor.__call__", "evidence_ids": ["TGT-PROC-001"]},
-                {"label": "文本 BatchFeature", "path": "qwen_tts/core/models/processing_qwen3_tts.py", "symbol": "BatchFeature", "evidence_ids": ["TGT-PROC-001"]}
+                {
+                  "label": "ChatML 文本分支",
+                  "path": "qwen_tts/core/models/processing_qwen3_tts.py",
+                  "symbol": "Qwen3TTSProcessor.apply_chat_template",
+                  "evidence_ids": [
+                    "TGT-PROC-001"
+                  ]
+                },
+                {
+                  "label": "文本 tokenizer 分支",
+                  "path": "qwen_tts/core/models/processing_qwen3_tts.py",
+                  "symbol": "Qwen3TTSProcessor.__call__",
+                  "evidence_ids": [
+                    "TGT-PROC-001"
+                  ]
+                },
+                {
+                  "label": "文本 BatchFeature",
+                  "path": "qwen_tts/core/models/processing_qwen3_tts.py",
+                  "symbol": "BatchFeature",
+                  "evidence_ids": [
+                    "TGT-PROC-001"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "Qwen3TTSProcessor 包装 Qwen tokenizer：__call__ 把单条文本归一为列表并返回包含文本 ids 等 tokenizer 字段的 BatchFeature；apply_chat_template 负责 ChatML 对话格式入口。",
               "state": "verified",
-              "evidence_ids": ["TGT-PROC-001"]
+              "evidence_ids": [
+                "TGT-PROC-001"
+              ]
             },
             {
               "type": "table",
-              "headers": ["职责", "源码路径", "固定范围"],
+              "headers": [
+                "职责",
+                "源码路径",
+                "固定范围"
+              ],
               "rows": [
-                ["文本 Processor", "qwen_tts/core/models/processing_qwen3_tts.py", "L27–L103"],
-                ["音频 tokenizer wrapper", "qwen_tts/inference/qwen3_tts_tokenizer.py", "L44–L410"],
-                ["voice-clone prompt wrapper", "qwen_tts/inference/qwen3_tts_model.py", "L356–L633"]
+                [
+                  "文本 Processor",
+                  "qwen_tts/core/models/processing_qwen3_tts.py",
+                  "L27–L103"
+                ],
+                [
+                  "音频 tokenizer wrapper",
+                  "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "L44–L410"
+                ],
+                [
+                  "voice-clone prompt wrapper",
+                  "qwen_tts/inference/qwen3_tts_model.py",
+                  "L356–L633"
+                ]
               ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-PROC-001"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-PROC-001"
+              ]
+            }
           ]
         },
         {
@@ -680,28 +1372,91 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "audio encode wrapper", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer.encode", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "输入归一化", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer._normalize_audio_inputs", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "feature extraction", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "self.feature_extractor", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "底层 tokenizer 分派", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "self.model.encode (V1/V2 dispatch)", "evidence_ids": ["TGT-PROC-002"]}
+                {
+                  "label": "audio encode wrapper",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer.encode",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "输入归一化",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer._normalize_audio_inputs",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "feature extraction",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "self.feature_extractor",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "底层 tokenizer 分派",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "self.model.encode (V1/V2 dispatch)",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                }
               ]
             },
             {
               "type": "call_chain",
               "items": [
-                {"label": "audio decode wrapper", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "Qwen3TTSTokenizer.decode", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "模型类型分支", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "model_type branch", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "底层 tokenizer 分派", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "self.model.decode (V1/V2 dispatch)", "evidence_ids": ["TGT-PROC-002"]},
-                {"label": "输出采样率", "path": "qwen_tts/inference/qwen3_tts_tokenizer.py", "symbol": "self.model.get_output_sample_rate", "evidence_ids": ["TGT-PROC-002"]}
+                {
+                  "label": "audio decode wrapper",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "Qwen3TTSTokenizer.decode",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "模型类型分支",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "model_type branch",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "底层 tokenizer 分派",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "self.model.decode (V1/V2 dispatch)",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                },
+                {
+                  "label": "输出采样率",
+                  "path": "qwen_tts/inference/qwen3_tts_tokenizer.py",
+                  "symbol": "self.model.get_output_sample_rate",
+                  "evidence_ids": [
+                    "TGT-PROC-002"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "Qwen3TTSTokenizer wrapper 将 URL、文件路径、base64 字符串或 numpy array 归一为目标 sample rate 的一维 float32 波形，再交给 feature extractor 与模型 encode；decode 将 ModelOutput/dict/list[dict] 归一后返回波形列表与输出 sample rate。",
               "state": "verified",
-              "evidence_ids": ["TGT-PROC-002"]
+              "evidence_ids": [
+                "TGT-PROC-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-PROC-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-PROC-002"
+              ]
+            }
           ]
         },
         {
@@ -712,9 +1467,20 @@
               "type": "paragraph",
               "text": "文本侧输出 ids/attention 等 BatchFeature 字段。wrapper 证明 12Hz codes 是 (T,num_quantizers)，配置默认 16 个有效 quantizers，因此 (T,16) 是默认组合下的 shape 推断。wrapper 还暴露 input/output sample rate、encode downsample rate 与 decode upsample rate；这些元数据不代表执行结果。",
               "state": "inference",
-              "evidence_ids": ["TGT-PROC-001", "TGT-PROC-002", "TGT-TOK12-002"]
+              "evidence_ids": [
+                "TGT-PROC-001",
+                "TGT-PROC-002",
+                "TGT-TOK12-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-PROC-001", "TGT-PROC-002", "TGT-TOK12-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-PROC-001",
+                "TGT-PROC-002",
+                "TGT-TOK12-002"
+              ]
+            }
           ]
         },
         {
@@ -724,18 +1490,50 @@
             {
               "type": "call_chain",
               "items": [
-                {"label": "voice-clone prompt 入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.create_voice_clone_prompt", "evidence_ids": ["TGT-API-002"]},
-                {"label": "提示词模式分支", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "x_vector_only_mode / icl_mode", "evidence_ids": ["TGT-API-002"]},
-                {"label": "voice-clone 生成入口", "path": "qwen_tts/inference/qwen3_tts_model.py", "symbol": "Qwen3TTSModel.generate_voice_clone", "evidence_ids": ["TGT-API-002"]}
+                {
+                  "label": "voice-clone prompt 入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.create_voice_clone_prompt",
+                  "evidence_ids": [
+                    "TGT-API-002"
+                  ]
+                },
+                {
+                  "label": "提示词模式分支",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "x_vector_only_mode / icl_mode",
+                  "evidence_ids": [
+                    "TGT-API-002"
+                  ]
+                },
+                {
+                  "label": "voice-clone 生成入口",
+                  "path": "qwen_tts/inference/qwen3_tts_model.py",
+                  "symbol": "Qwen3TTSModel.generate_voice_clone",
+                  "evidence_ids": [
+                    "TGT-API-002"
+                  ]
+                }
               ]
             },
             {
               "type": "paragraph",
               "text": "模型 wrapper 的输入契约中，x-vector-only 分支只使用说话人 embedding 并忽略 ref_text/ref_code；ICL text+audio 分支要求参考文本，并使用参考文本与参考语音 codes。两者不能合并，也不能据静态契约声称任一路径已经运行。",
               "state": "verified",
-              "evidence_ids": ["TGT-PROC-001", "TGT-PROC-002", "TGT-API-002"]
+              "evidence_ids": [
+                "TGT-PROC-001",
+                "TGT-PROC-002",
+                "TGT-API-002"
+              ]
             },
-            {"type": "source_refs", "evidence_ids": ["TGT-PROC-001", "TGT-PROC-002", "TGT-API-002"]}
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "TGT-PROC-001",
+                "TGT-PROC-002",
+                "TGT-API-002"
+              ]
+            }
           ]
         },
         {
@@ -750,7 +1548,8 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     }
   ]
 }

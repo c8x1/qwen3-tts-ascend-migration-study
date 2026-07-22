@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "pages": [
+    {
+      "slug": "guide/migration-boundary.html",
+      "title": "迁移边界课",
+      "summary": "在进入官方源码前，先分清固定源码事实、跨项目静态对照与必须由硬件验证的结论。",
+      "order": 2,
+      "group": "learning-route-pilot",
+      "track": "入门教程",
+      "objectives": ["建立迁移结论的证据等级", "知道何时应回到固定源码而不是推断运行结果"],
+      "prerequisites": ["理解本知识站只引用固定版本源码"],
+      "sections": [
+        {
+          "id": "boundary",
+          "title": "先画出迁移边界",
+          "blocks": [
+            {"type": "paragraph", "text": "官方 Qwen3-TTS 源码可用于核对公开入口和默认值；MindSpeed-MM、MindSpeed-LLM 与 MOSS-TTS 的固定快照可用于结构性对照。它们都不能单独证明 Ascend 910B、CANN 版本、分布式稳定性或性能。", "state": "inference", "evidence_ids": ["TGT-SCOPE-002", "REF-MM-NPU", "REF-LLM-PARALLEL", "REF-MOSS-MODEL"]},
+            {"type": "source_refs", "evidence_ids": ["TGT-SCOPE-002", "REF-MM-NPU"]}
+          ]
+        },
+        {
+          "id": "judgement",
+          "title": "读完能判断什么",
+          "blocks": [
+            {"type": "paragraph", "text": "你能判断一条说法是固定源码可核验、项目自身声明、跨项目静态推断，还是必须标为待真机验证；也能拒绝把 CUDA 默认、参考项目配置或文本规模证据直接写成 Qwen3-TTS 在 910B 上的运行结论。", "state": "inference", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU", "REF-LLM-PARALLEL"]}
+          ]
+        },
+        {
+          "id": "next-step",
+          "title": "下一步",
+          "blocks": [
+            {"type": "paragraph", "text": "下一页进入官方包结构与推理 API，先建立可回查的目标源码入口。", "state": "project_claim", "evidence_ids": []}
+          ]
+        }
+      ]
+    },
+    {
+      "slug": "guide/implementation-route.html",
+      "title": "实施路线总览",
+      "summary": "将未来硬件验证组织为六个阶段；除固定源码引用外，每一步都是 pending_hardware 的实验计划。",
+      "order": 33,
+      "group": "learning-route-pilot",
+      "track": "实施路线",
+      "next_slug": "mapping/map-hardware.html",
+      "objectives": ["按阶段记录验证输入、观察项与通过条件", "避免把计划表写成硬件运行声明"],
+      "prerequisites": ["已完成迁移边界课并能区分静态证据与运行结论"],
+      "sections": [
+        {
+          "id": "six-stages",
+          "title": "六阶段实施路线",
+          "blocks": [
+            {"type": "paragraph", "text": "以下阶段是验证顺序，不是已完成结果。固定源码只提供待检查的入口和配置锚点；任何环境、设备、吞吐、数值或验收结论均待真机验证。", "state": "pending_hardware", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU"]},
+            {"type": "source_refs", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU", "REF-LLM-PARALLEL"]}
+          ]
+        },
+        {"id": "environment", "title": "1. 环境", "blocks": [{"type": "paragraph", "text": "待真机验证：记录驱动、CANN、PyTorch、torch-npu、依赖解析与最小导入；通过条件是在固定环境清单中保存可复查日志。", "state": "pending_hardware", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU"]}]},
+        {"id": "single-card", "title": "2. 单卡", "blocks": [{"type": "paragraph", "text": "待真机验证：在受控样本上检查装载、前向、loss、dtype 与错误日志；通过条件是预设断言和数值门限均有记录。", "state": "pending_hardware", "evidence_ids": ["TGT-TRAIN-005", "REF-MM-NPU"]}]},
+        {"id": "single-node-multi-card", "title": "3. 单机多卡", "blocks": [{"type": "paragraph", "text": "待真机验证：检查 launcher、rank、collective、数据分片与 loss 一致性；通过条件是每个 rank 的预设检查均通过。", "state": "pending_hardware", "evidence_ids": ["TGT-TRAIN-006", "REF-LLM-PARALLEL"]}]},
+        {"id": "multi-node", "title": "4. 多机", "blocks": [{"type": "paragraph", "text": "待真机验证：检查节点发现、通信、恢复和失败日志；通过条件是受控作业的跨节点一致性与恢复检查有证据。", "state": "pending_hardware", "evidence_ids": ["REF-MM-TRAIN", "REF-LLM-PARALLEL"]}]},
+        {"id": "performance", "title": "5. 性能", "blocks": [{"type": "paragraph", "text": "待真机验证：在固定工作负载、版本和测量窗口下记录吞吐、显存、profiling 与数值稳定性；没有测量前不比较性能。", "state": "pending_hardware", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU"]}]},
+        {"id": "acceptance", "title": "6. 验收", "blocks": [{"type": "paragraph", "text": "待真机验证：汇总环境、单卡、单机多卡、多机和性能的日志，检查保存与重载，并保留失败条件；通过条件由执行前的验收表定义。", "state": "pending_hardware", "evidence_ids": ["TGT-EXPORT-003", "REF-MM-CHECKPOINT"]}]},
+        {"id": "judgement", "title": "读完能判断什么", "blocks": [{"type": "paragraph", "text": "你能判断一项实施工作属于哪一阶段、需要什么可复查记录，以及为什么在硬件实验完成前必须保持 pending_hardware，而不能把静态源码引用写成兼容性或性能结论。", "state": "pending_hardware", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU"]}]},
+        {"id": "next-step", "title": "下一步", "blocks": [{"type": "paragraph", "text": "下一页回到 910B 验证映射，使用它复查各阶段的硬件门与证据边界。", "state": "pending_hardware", "evidence_ids": ["TGT-HW-001", "REF-MM-NPU"]}]}
+      ]
+    }
+  ]
+}

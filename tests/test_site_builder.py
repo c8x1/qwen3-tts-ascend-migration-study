@@ -39,7 +39,7 @@ TARGET_FIXED_PREFIX = (
 )
 TARGET_PAGE_CONTRACTS = {
     "target/package-inference-api.html": {
-        "order": 2,
+        "order": 3,
         "title": "包结构与推理 API",
         "sections": {
             "package-layout": {
@@ -74,7 +74,7 @@ TARGET_PAGE_CONTRACTS = {
         "boundary": "package-boundary",
     },
     "target/model-architecture.html": {
-        "order": 3,
+        "order": 4,
         "title": "复合模型架构与生成流",
         "sections": {
             "composite-config": {"TGT-CONFIG-001"},
@@ -99,7 +99,7 @@ TARGET_PAGE_CONTRACTS = {
         "boundary": "model-boundary",
     },
     "target/tokenizer-12hz.html": {
-        "order": 4,
+        "order": 5,
         "title": "12Hz Tokenizer 契约",
         "sections": {
             "package-tokenizer-registry": {"TGT-PKG-002"},
@@ -122,7 +122,7 @@ TARGET_PAGE_CONTRACTS = {
         "boundary": "training-gap",
     },
     "target/tokenizer-25hz.html": {
-        "order": 5,
+        "order": 6,
         "title": "25Hz Tokenizer 静态依赖图",
         "sections": {
             "asset-inventory": {"TGT-TOK25-002"},
@@ -152,7 +152,7 @@ TARGET_PAGE_CONTRACTS = {
         "boundary": "asset-boundary",
     },
     "target/processor-contracts.html": {
-        "order": 6,
+        "order": 7,
         "title": "Processor 输入与提示词契约",
         "sections": {
             "text-contract": {"TGT-PROC-001"},
@@ -176,7 +176,7 @@ TARGET_PAGE_CONTRACTS = {
 }
 TRAINING_PAGE_CONTRACTS = {
     "target/sft-data-collate.html": {
-        "order": 7,
+        "order": 8,
         "title": "SFT 数据预处理与 Collate",
         "sections": {
             "public-recipe": {"TGT-SCOPE-001"},
@@ -216,7 +216,7 @@ TRAINING_PAGE_CONTRACTS = {
         "boundary": "data-boundary",
     },
     "target/sft-training-loop.html": {
-        "order": 8,
+        "order": 9,
         "title": "SFT 训练循环",
         "sections": {
             "target-precision-defaults": {"TGT-TRAIN-000"},
@@ -273,7 +273,7 @@ TRAINING_PAGE_CONTRACTS = {
         "boundary": "training-boundary",
     },
     "target/optimizer-checkpoint-export.html": {
-        "order": 9,
+        "order": 10,
         "title": "优化器、Checkpoint 与导出",
         "sections": {
             "accelerate-ownership": {
@@ -308,7 +308,7 @@ TRAINING_PAGE_CONTRACTS = {
         "boundary": "checkpoint-gap",
     },
     "target/coverage-gaps.html": {
-        "order": 10,
+        "order": 11,
         "title": "目标覆盖矩阵与验证缺口",
         "sections": {
             "target-coverage": set(),
@@ -441,7 +441,7 @@ class SiteBuilderTest(unittest.TestCase):
             ROOT / "content/target-training.json",
         ]
         pages = load_page_catalogs(catalogs)
-        self.assertEqual([page["order"] for page in pages], list(range(1, 14)))
+        self.assertEqual([page["order"] for page in pages], [1, *range(3, 15)])
         serialized = json.dumps(pages, ensure_ascii=False)
         for text in [
             "finetuning/README.md",
@@ -763,7 +763,7 @@ class SiteBuilderTest(unittest.TestCase):
             self.assertEqual(len(built), 14)
 
             pages = load_page_catalogs(FULL_TARGET_CATALOGS)
-            self.assertEqual([page["order"] for page in pages], list(range(1, 14)))
+            self.assertEqual([page["order"] for page in pages], [1, *range(3, 15)])
             expected_nav = [(page["order"], page["title"]) for page in pages]
             external = json.loads(
                 (output / "assets/search-index.json").read_text(
@@ -1865,10 +1865,35 @@ class SiteBuilderTest(unittest.TestCase):
         catalogs = build_site_cli.default_catalogs()
         pages = load_page_catalogs(catalogs)
         slugs = {page["slug"] for page in pages}
+        self.assertEqual(len(pages), 33)
+        self.assertEqual(
+            {
+                "guide/migration-boundary.html",
+                "guide/implementation-route.html",
+            },
+            {slug for slug in slugs if slug.startswith("guide/")},
+        )
         self.assertTrue(any(slug.startswith("reference/") for slug in slugs))
         self.assertTrue(any(slug.startswith("mapping/") for slug in slugs))
         with tempfile.TemporaryDirectory() as tmp:
             built = build_site(Path(tmp), catalogs)
+            self.assertEqual(len([path for path in built if path.suffix == ".html"]), 33)
+            search_documents = json.loads(
+                (Path(tmp) / "assets/search-index.json").read_text(encoding="utf-8")
+            )
+            self.assertTrue(
+                {
+                    "guide/migration-boundary.html",
+                    "guide/implementation-route.html",
+                }.issubset({document["href"] for document in search_documents})
+            )
+            for slug in (
+                "guide/migration-boundary.html",
+                "guide/implementation-route.html",
+            ):
+                html = (Path(tmp) / slug).read_text(encoding="utf-8")
+                self.assertIn("读完能判断什么", html)
+                self.assertIn('rel="next"', html)
             self.assertTrue(any("reference/" in str(path) for path in built))
             self.assertTrue(any("mapping/" in str(path) for path in built))
 

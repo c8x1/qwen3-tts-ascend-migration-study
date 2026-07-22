@@ -30,6 +30,10 @@
             "type": "string",
             "enum": ["入门教程", "源码深读", "实施路线"]
           },
+          "next_slug": {
+            "type": "string",
+            "pattern": "^(index|search|indexes/[a-z0-9-]+|target/[a-z0-9-]+|reference/[a-z0-9-]+|mapping/[a-z0-9-]+|guide/[a-z0-9-]+)\\.html$"
+          },
           "objectives": {
             "type": "array",
             "minItems": 1,

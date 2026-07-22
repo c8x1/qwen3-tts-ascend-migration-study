@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="以固定源码快照和证据记录为边界，从 PyTorch 单卡基础逐步进入 Qwen3-TTS 包、模型、音频 tokenizer、训练契约与 SFT。">
+  <meta name="description" content="从迁移边界课进入官方目标源码，再用源码深读和实施路线组织静态证据与后续真机验证。">
   <title>Qwen3-TTS 官方目标源码学习路径 · Qwen3-TTS × Ascend 910B</title>
   <link rel="stylesheet" href="assets/theme.css">
   <link rel="stylesheet" href="assets/layout.css">
@@ -27,16 +27,16 @@
     </div>
     <nav id="chapter-nav" class="chapter-nav" aria-label="章节导航">
       <div class="rail-icons" role="group" aria-label="章节快捷入口"><a class="rail-link" href="#top"><span aria-hidden="true">⌂</span><span class="rail-tooltip">首页</span></a><a class="rail-link" href="#chapter-tree"><span aria-hidden="true">▤</span><span class="rail-tooltip">章节</span></a></div>
-      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li class="chapter-group"><h2 class="chapter-group-label">入门教程</h2></li><li class="chapter-group"><h2 class="chapter-group-label">源码深读</h2></li><li><a data-page-link class="active" aria-current="page" href="index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a data-page-link href="target/package-inference-api.html">2 · 包结构与推理 API</a></li><li><a data-page-link href="target/model-architecture.html">3 · 复合模型架构与生成流</a></li><li><a data-page-link href="target/tokenizer-12hz.html">4 · 12Hz Tokenizer 契约</a></li><li><a data-page-link href="target/tokenizer-25hz.html">5 · 25Hz Tokenizer 静态依赖图</a></li><li><a data-page-link href="target/processor-contracts.html">6 · Processor 输入与提示词契约</a></li><li><a data-page-link href="target/sft-data-collate.html">7 · SFT 数据预处理与 Collate</a></li><li><a data-page-link href="target/sft-training-loop.html">8 · SFT 训练循环</a></li><li><a data-page-link href="target/optimizer-checkpoint-export.html">9 · 优化器、Checkpoint 与导出</a></li><li><a data-page-link href="target/coverage-gaps.html">10 · 目标覆盖矩阵与验证缺口</a></li><li><a data-page-link href="indexes/source-files.html">11 · 四个固定快照文件索引</a></li><li><a data-page-link href="indexes/symbols-configs.html">12 · 符号与配置项索引</a></li><li><a data-page-link href="search.html">13 · 全站搜索</a></li><li><a data-page-link href="reference/mm-config.html">14 · MM 配置入口</a></li><li><a data-page-link href="reference/mm-data.html">15 · MM 数据分派</a></li><li><a data-page-link href="reference/mm-conversion.html">16 · MM 检查点转换</a></li><li><a data-page-link href="reference/mm-training.html">17 · MM 训练边界</a></li><li><a data-page-link href="reference/mm-npu.html">18 · MM NPU 开关</a></li><li><a data-page-link href="reference/mm-checkpoint.html">19 · MM 保存状态</a></li><li><a data-page-link href="reference/llm-launch.html">20 · LLM 启动形态</a></li><li><a data-page-link href="reference/llm-parallel.html">21 · LLM 并行维度</a></li><li><a data-page-link href="reference/llm-checkpoint.html">22 · LLM 恢复文档</a></li><li><a data-page-link href="reference/llm-scale.html">23 · LLM 多节点边界</a></li><li><a data-page-link href="reference/moss-package.html">24 · MOSS 包边界</a></li><li><a data-page-link href="reference/moss-model.html">25 · MOSS Delay 模型</a></li><li><a data-page-link href="reference/moss-training.html">26 · MOSS 训练验证</a></li><li><a data-page-link href="mapping/map-data.html">27 · 迁移：数据</a></li><li><a data-page-link href="mapping/map-checkpoint.html">28 · 迁移：检查点</a></li><li><a data-page-link href="mapping/map-distributed.html">29 · 迁移：分布式</a></li><li><a data-page-link href="mapping/map-codec.html">30 · 迁移：Codec</a></li><li><a data-page-link href="mapping/map-hardware.html">31 · 迁移：910B 验证</a></li><li class="chapter-group"><h2 class="chapter-group-label">实施路线</h2></li></ul></div>
+      <div class="sidebar-content"><p class="nav-label">学习路径</p><ul id="chapter-tree" class="chapter-tree"><li class="chapter-group"><h2 class="chapter-group-label">入门教程</h2></li><li><a data-page-link class="active" aria-current="page" href="index.html">1 · Qwen3-TTS 官方目标源码学习路径</a></li><li><a data-page-link href="guide/migration-boundary.html">2 · 迁移边界课</a></li><li><a data-page-link href="target/package-inference-api.html">3 · 包结构与推理 API</a></li><li><a data-page-link href="target/model-architecture.html">4 · 复合模型架构与生成流</a></li><li><a data-page-link href="target/tokenizer-12hz.html">5 · 12Hz Tokenizer 契约</a></li><li><a data-page-link href="target/tokenizer-25hz.html">6 · 25Hz Tokenizer 静态依赖图</a></li><li><a data-page-link href="target/processor-contracts.html">7 · Processor 输入与提示词契约</a></li><li><a data-page-link href="target/sft-data-collate.html">8 · SFT 数据预处理与 Collate</a></li><li><a data-page-link href="target/sft-training-loop.html">9 · SFT 训练循环</a></li><li><a data-page-link href="target/optimizer-checkpoint-export.html">10 · 优化器、Checkpoint 与导出</a></li><li><a data-page-link href="target/coverage-gaps.html">11 · 目标覆盖矩阵与验证缺口</a></li><li><a data-page-link href="indexes/source-files.html">12 · 四个固定快照文件索引</a></li><li><a data-page-link href="indexes/symbols-configs.html">13 · 符号与配置项索引</a></li><li><a data-page-link href="search.html">14 · 全站搜索</a></li><li class="chapter-group"><h2 class="chapter-group-label">源码深读</h2></li><li><a data-page-link href="reference/mm-config.html">15 · MM 配置入口</a></li><li><a data-page-link href="reference/mm-data.html">16 · MM 数据分派</a></li><li><a data-page-link href="reference/mm-conversion.html">17 · MM 检查点转换</a></li><li><a data-page-link href="reference/mm-training.html">18 · MM 训练边界</a></li><li><a data-page-link href="reference/mm-npu.html">19 · MM NPU 开关</a></li><li><a data-page-link href="reference/mm-checkpoint.html">20 · MM 保存状态</a></li><li><a data-page-link href="reference/llm-launch.html">21 · LLM 启动形态</a></li><li><a data-page-link href="reference/llm-parallel.html">22 · LLM 并行维度</a></li><li><a data-page-link href="reference/llm-checkpoint.html">23 · LLM 恢复文档</a></li><li><a data-page-link href="reference/llm-scale.html">24 · LLM 多节点边界</a></li><li><a data-page-link href="reference/moss-package.html">25 · MOSS 包边界</a></li><li><a data-page-link href="reference/moss-model.html">26 · MOSS Delay 模型</a></li><li><a data-page-link href="reference/moss-training.html">27 · MOSS 训练验证</a></li><li><a data-page-link href="mapping/map-data.html">28 · 迁移：数据</a></li><li><a data-page-link href="mapping/map-checkpoint.html">29 · 迁移：检查点</a></li><li><a data-page-link href="mapping/map-distributed.html">30 · 迁移：分布式</a></li><li><a data-page-link href="mapping/map-codec.html">31 · 迁移：Codec</a></li><li><a data-page-link href="mapping/map-hardware.html">32 · 迁移：910B 验证</a></li><li class="chapter-group"><h2 class="chapter-group-label">实施路线</h2></li><li><a data-page-link href="guide/implementation-route.html">33 · 实施路线总览</a></li></ul></div>
       <button class="drawer-close" type="button" data-close-drawer="left">关闭章节导航</button>
     </nav>
     <main id="article-content">
       <article>
         <p class="breadcrumb">foundation / 1</p>
-        <p class="lesson-wayfinding">学习轨道：源码深读</p>
+        <p class="lesson-wayfinding">学习轨道：入门教程</p>
         <h1>Qwen3-TTS 官方目标源码学习路径</h1>
-        <p class="lead">以固定源码快照和证据记录为边界，从 PyTorch 单卡基础逐步进入 Qwen3-TTS 包、模型、音频 tokenizer、训练契约与 SFT。</p>
-        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>理解本知识站的静态源码阅读边界与分阶段学习顺序</li><li>区分项目原生环境与 CANN 8.5.2 待验证环境</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与训练循环</li></ul></div></div>
+        <p class="lead">从迁移边界课进入官方目标源码，再用源码深读和实施路线组织静态证据与后续真机验证。</p>
+        <div class="learning-contract"><div><h2>学习目标</h2><ul><li>理解三层学习路线的进入顺序与证据边界</li><li>区分静态源码阅读、跨项目对照和待真机验证的实施计划</li></ul></div><div><h2>前置知识</h2><ul><li>熟悉 PyTorch 单卡张量与训练循环</li></ul></div></div>
         <div class="status-grid" aria-label="证据状态图例"><span class="evidence-state" data-state="verified">已核验</span><span class="evidence-state" data-state="project_claim">项目声明</span><span class="evidence-state" data-state="inference">静态推断</span><span class="evidence-state" data-state="pending_hardware">待真机验证</span></div>
 <div class="source-example" id="source"><div class="code-header"><span>官方装载入口（短摘录）</span><div class="code-actions"><a class="source-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/inference/qwen3_tts_model.py" data-start-line="83" data-end-line="87" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L83-L87">固定源码 L83–L87 ↗</a><button class="copy-source" type="button" data-copy-target="qwen-load-example">复制</button><span class="copy-status" role="status" aria-live="polite"></span></div></div><pre id="qwen-load-example"><code>    def from_pretrained(
         cls,
@@ -44,15 +44,15 @@
         **kwargs,
     ) -&gt; &quot;Qwen3TTSModel&quot;:</code></pre></div>
         <section id="public-scope"><h2>公开范围与许可证边界</h2><p><span class="evidence-state" data-state="verified">状态：已核验</span> 本阶段只对固定的 Qwen3-TTS 官方公开源码进行静态阅读，并核对源码树中的 Apache License 2.0 文本；权重、数据与其他材料需要分别确认许可。本阶段没有运行 Qwen3-TTS 训练。这里不声称训练可运行，也不声称任何 CANN 版本兼容。</p><ul class="source-refs"><li><a href="#evidence-TGT-SCOPE-002">证据 TGT-SCOPE-002</a></li><li><a href="#evidence-TGT-PKG-003">证据 TGT-PKG-003</a></li></ul></section>
-<section id="learning-path"><h2>从单卡基础到 SFT 的学习路径</h2><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>PyTorch 单卡</strong><code>基础张量与训练循环</code><span>tensor → loss → backward → step</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>包与 API</strong><code>qwen_tts</code><span>公开入口与 from_pretrained</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>模型</strong><code>qwen_tts/core/models</code><span>Talker 与条件生成</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>Tokenizers</strong><code>qwen_tts/core/tokenizer_12hz 与 tokenizer_25hz</code><span>encode / decode</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>契约</strong><code>finetuning/dataset.py</code><span>数据、设备与导出边界</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>SFT</strong><code>finetuning/sft_12hz.py</code><span>loss → backward → optimizer</span></div></div></section>
+<section id="learning-path"><h2>三层学习路线图</h2><p><span class="evidence-state" data-state="inference">状态：静态推断</span> 第一层“入门教程”先用迁移边界课和官方目标页建立术语、输入输出与未知项；第二层“源码深读”再进入三份参考项目和五个迁移映射，逐条回到固定版本证据；第三层“实施路线”把环境到验收拆成待真机验证的阶段。三层不把静态阅读提升为硬件结论。</p><div class="call-chain" aria-label="学习调用链"><div class="call-step"><strong>第一层：入门教程</strong><code>guide/migration-boundary.html</code><span>迁移边界 → 官方目标源码</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>第二层：源码深读</strong><code>reference/* 与 mapping/*</code><span>固定证据 → 对照与映射</span></div><span aria-hidden="true">→</span><div class="call-step"><strong>第三层：实施路线</strong><code>guide/implementation-route.html</code><span>环境 → 单卡 → 单机多卡 → 多机 → 性能 → 验收</span></div></div></section>
 <section id="environment-lanes"><h2>两条环境车道</h2><p><span class="evidence-state" data-state="pending_hardware">状态：待真机验证</span> 项目原生学习车道固定为 PyTorch 2.7.1 + CANN 8.5.0；目标验证车道固定为 PyTorch 2.7.1 + CANN 8.5.2 unknown。CANN 8.5.2 兼容性：unknown，待真机验证。两条车道不能互相替代结论。</p><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表"><table class="contract-table"><thead><tr><th scope="col">车道</th><th scope="col">软件组合</th><th scope="col">用途</th><th scope="col">结论状态</th></tr></thead><tbody><tr><td>project-native</td><td>2.7.1 + 8.5.0</td><td>复现参考项目原生环境并学习源码</td><td>项目记录</td></tr><tr><td>target</td><td>2.7.1 + 8.5.2 unknown</td><td>面向目标环境进行真机兼容性验证</td><td>unknown / 待真机验证</td></tr></tbody></table></div><ul class="source-refs"><li><a href="#evidence-PH1-ENV-LANES">证据 PH1-ENV-LANES</a></li><li><a href="#evidence-TGT-HW-001">证据 TGT-HW-001</a></li></ul></section>
 <section id="phase-boundary"><h2>本任务之后的五个工作包</h2><p><span class="evidence-state" data-state="project_claim">状态：项目声明</span> 以下五个工作包明确延期，不由本 foundation 生成器提前给出结论。</p><div class="table-scroll" tabindex="0" role="region" aria-label="可横向滚动的数据表"><table class="contract-table"><thead><tr><th scope="col">序号</th><th scope="col">延期工作包</th><th scope="col">当前边界</th></tr></thead><tbody><tr><td>1</td><td>目标源码架构走读</td><td>后续生成 target 架构页面</td></tr><tr><td>2</td><td>MindSpeed-MM 训练栈映射</td><td>后续建立主参考映射</td></tr><tr><td>3</td><td>分布式与性能契约</td><td>后续结合规模化卫星证据</td></tr><tr><td>4</td><td>环境与兼容性验证</td><td>后续在 CANN 8.5.2 真机执行</td></tr><tr><td>5</td><td>单机到规模化 SFT 教程</td><td>后续在契约与实验结果齐备后编写</td></tr></tbody></table></div></section>
-        <nav class="page-nav" aria-label="相邻章节"><a rel="next" href="target/package-inference-api.html">下一页：包结构与推理 API →</a></nav>
+        <nav class="page-nav" aria-label="相邻章节"><a rel="next" href="guide/migration-boundary.html">下一页：迁移边界课 →</a></nav>
       </article>
     </main>
     <aside id="evidence-rail" class="evidence-rail" aria-label="证据与页内目录">
       <div class="rail-icons" role="group" aria-label="证据快捷入口"><a class="rail-link" data-rail-target="page-toc" href="#page-toc"><span aria-hidden="true">§</span><span class="rail-tooltip">目录</span></a></div>
-      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#public-scope">公开范围与许可证边界</a><a data-rail-content href="#learning-path">从单卡基础到 SFT 的学习路径</a><a data-rail-content href="#environment-lanes">两条环境车道</a><a data-rail-content href="#phase-boundary">本任务之后的五个工作包</a></section><section id="evidence-TGT-SCOPE-002" class="rail-card evidence-card" data-rail-card>
+      <div class="sidebar-content"><section id="page-toc" class="rail-card toc-card" data-rail-card><h2>本页目录</h2><a data-rail-content href="#public-scope">公开范围与许可证边界</a><a data-rail-content href="#learning-path">三层学习路线图</a><a data-rail-content href="#environment-lanes">两条环境车道</a><a data-rail-content href="#phase-boundary">本任务之后的五个工作包</a></section><section id="evidence-TGT-SCOPE-002" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-SCOPE-002</h2>
 <p data-rail-content><span class="evidence-state" data-state="project_claim" data-evidence-state="project_claim">状态：项目声明</span></p>
 <p data-rail-content>official report/collections describe the released family and claims; inventories do not prove a fixed public 25Hz checkpoint</p>
@@ -66,62 +66,18 @@
 <p data-rail-content>official target source root carries Apache License 2.0 text; weights/data remain separately scoped</p>
 <a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="LICENSE" data-start-line="1" data-end-line="201" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/LICENSE#L1-L201">固定源码 LICENSE · L1–L201 ↗</a>
 <span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-PKG-001" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-PKG-001</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>package metadata, Python floor and runtime dependencies</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="pyproject.toml" data-start-line="1" data-end-line="45" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/pyproject.toml#L1-L45">固定源码 pyproject.toml · L1–L45 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
+</section><section id="evidence-REF-MM-NPU" class="rail-card evidence-card" data-rail-card>
+<h2>REF-MM-NPU</h2>
+<p data-rail-content><span class="evidence-state" data-state="pending_hardware" data-evidence-state="pending_hardware">状态：待真机验证</span></p>
+<p data-rail-content>Exposes deterministic and NPU JIT controls whose runtime behavior is unverified.</p>
+<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="mindspeed-mm-0edd553e" data-source-path="mindspeed_mm/training.py" data-start-line="173" data-end-line="178" href="https://github.com/Ascend/MindSpeed-MM/blob/0edd553e0ac9c912fe422c42cc9f42db9255ddcf/mindspeed_mm/training.py#L173-L178">固定源码 mindspeed_mm/training.py · L173–L178 ↗</a>
+<span data-rail-content class="citation-label">来源台账 SRC-019</span>
 </section><section id="evidence-TGT-API-001" class="rail-card evidence-card" data-rail-card>
 <h2>TGT-API-001</h2>
 <p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
 <p data-rail-content>`from_pretrained` registers AutoConfig/AutoModel/AutoProcessor then loads model and processor</p>
 <p data-rail-content>摘录：AutoModel.from_pretrained</p>
 <a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/inference/qwen3_tts_model.py" data-start-line="83" data-end-line="121" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py#L83-L121">固定源码 qwen_tts/inference/qwen3_tts_model.py · L83–L121 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-MODEL-002" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-MODEL-002</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>Talker backbone, codec-0 LM head and residual code predictor integration</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1427" data-end-line="1810" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1427-L1810">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1427–L1810 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-MODEL-003" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-MODEL-003</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>composite conditional generation and prompt/speaker injection flow</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/models/modeling_qwen3_tts.py" data-start-line="1813" data-end-line="2292" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py#L1813-L2292">固定源码 qwen_tts/core/models/modeling_qwen3_tts.py · L1813–L2292 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-TOK12-001" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-TOK12-001</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>split RVQ, 12Hz model encode/decode and causal/chunked decoder</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py" data-start-line="780" data-end-line="1024" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py#L780-L1024">固定源码 qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py · L780–L1024 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-TOK25-001" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-TOK25-001</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>DiT mel sampling and BigVGAN waveform decoder code exists</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py" data-start-line="996" data-end-line="1273" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py#L996-L1273">固定源码 qwen_tts/core/tokenizer_25hz/modeling_qwen3_tts_tokenizer_v1.py · L996–L1273 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-DATA-002" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-DATA-002</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>dataset makes ChatML text, 24kHz reference mel and dual-track collate tensors</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="finetuning/dataset.py" data-start-line="33" data-end-line="217" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/dataset.py#L33-L217">固定源码 finetuning/dataset.py · L33–L217 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-EXPORT-001" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-EXPORT-001</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>per-epoch copy/config mutation, speaker row 3000 and safetensors export</p>
-<p data-rail-content>摘录：checkpoint-epoch-{epoch}</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="finetuning/sft_12hz.py" data-start-line="126" data-end-line="158" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L126-L158">固定源码 finetuning/sft_12hz.py · L126–L158 ↗</a>
-<span data-rail-content class="citation-label">来源台账 SRC-001</span>
-</section><section id="evidence-TGT-TRAIN-005" class="rail-card evidence-card" data-rail-card>
-<h2>TGT-TRAIN-005</h2>
-<p data-rail-content><span class="evidence-state" data-state="verified" data-evidence-state="verified">状态：已核验</span></p>
-<p data-rail-content>exact loss is `outputs.loss + 0.3 * sub_talker_loss`, then backward, clip and optimizer step</p>
-<p data-rail-content>摘录：outputs.loss + 0.3 * sub_talker_loss</p>
-<a data-rail-content class="citation-link print-url" data-fixed-source-link="true" data-snapshot-id="qwen3-tts-022e286b" data-source-path="finetuning/sft_12hz.py" data-start-line="100" data-end-line="121" href="https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/finetuning/sft_12hz.py#L100-L121">固定源码 finetuning/sft_12hz.py · L100–L121 ↗</a>
 <span data-rail-content class="citation-label">来源台账 SRC-001</span>
 </section><section id="evidence-PH1-ENV-LANES" class="rail-card evidence-card" data-rail-card>
 <h2>PH1-ENV-LANES</h2>

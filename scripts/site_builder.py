@@ -664,6 +664,13 @@ def render_page(page, navigation, evidence, search_documents) -> str:
                 + "".join(adjacent)
                 + "</nav>"
             )
+    if page.get("next_slug"):
+        next_slug = page["next_slug"]
+        page_nav += (
+            '<nav class="page-nav route-next" aria-label="下一步学习">'
+            f'<a rel="next" href="{_escape(relative_href(page_slug, next_slug))}">'
+            '下一页：进入实施前的证据复查 →</a></nav>'
+        )
 
     evidence_cards = "".join(
         _render_evidence_card(page_slug, evidence_id, evidence[evidence_id], registry)

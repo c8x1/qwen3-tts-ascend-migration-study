@@ -1,5 +1,113 @@
-{"schema_version":1,"pages":[
-{"slug":"reference/moss-package.html","title":"MOSS 包边界","summary":"依赖与运行时边界。","order":24,"group":"moss-tts","objectives":["识别包依赖"],"prerequisites":["Python 包基础"],"sections":[{"id":"package","title":"包边界","blocks":[{"type":"paragraph","text":"固定 package metadata 命名 Python 运行时依赖，未建立 Ascend 支持。","state":"verified","evidence_ids":["REF-MOSS-PACKAGE"]},{"type":"source_refs","evidence_ids":["REF-MOSS-PACKAGE"]}]}]},
-{"slug":"reference/moss-model.html","title":"MOSS Delay 模型","summary":"多码本结构对照。","order":25,"group":"moss-tts","objectives":["区分结构"],"prerequisites":["codec 基础"],"sections":[{"id":"model","title":"模型","blocks":[{"type":"paragraph","text":"Delay 模型组合 Qwen3 LM、VQ embedding 与通道 heads；不是目标的替代实现。","state":"verified","evidence_ids":["REF-MOSS-MODEL"]},{"type":"source_refs","evidence_ids":["REF-MOSS-MODEL"]}]}]},
-{"slug":"reference/moss-training.html","title":"MOSS 训练验证","summary":"硬件验证边界。","order":26,"group":"moss-tts","objectives":["限定运行结论"],"prerequisites":["910B 环境"],"sections":[{"id":"training","title":"训练","blocks":[{"type":"paragraph","text":"观察：捕获精度、collective、loss 和保存重载。通过条件：最小 Ascend loop 完成并能重载 checkpoint。","state":"pending_hardware","evidence_ids":["REF-MOSS-TRAIN"]},{"type":"source_refs","evidence_ids":["REF-MOSS-TRAIN"]}]}]}
-]}
+{
+  "schema_version": 1,
+  "pages": [
+    {
+      "slug": "reference/moss-package.html",
+      "title": "MOSS 包边界",
+      "summary": "依赖与运行时边界。",
+      "order": 25,
+      "group": "moss-tts",
+      "objectives": [
+        "识别包依赖"
+      ],
+      "prerequisites": [
+        "Python 包基础"
+      ],
+      "sections": [
+        {
+          "id": "package",
+          "title": "包边界",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "固定 package metadata 命名 Python 运行时依赖，未建立 Ascend 支持。",
+              "state": "verified",
+              "evidence_ids": [
+                "REF-MOSS-PACKAGE"
+              ]
+            },
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "REF-MOSS-PACKAGE"
+              ]
+            }
+          ]
+        }
+      ],
+      "track": "源码深读"
+    },
+    {
+      "slug": "reference/moss-model.html",
+      "title": "MOSS Delay 模型",
+      "summary": "多码本结构对照。",
+      "order": 26,
+      "group": "moss-tts",
+      "objectives": [
+        "区分结构"
+      ],
+      "prerequisites": [
+        "codec 基础"
+      ],
+      "sections": [
+        {
+          "id": "model",
+          "title": "模型",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "Delay 模型组合 Qwen3 LM、VQ embedding 与通道 heads；不是目标的替代实现。",
+              "state": "verified",
+              "evidence_ids": [
+                "REF-MOSS-MODEL"
+              ]
+            },
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "REF-MOSS-MODEL"
+              ]
+            }
+          ]
+        }
+      ],
+      "track": "源码深读"
+    },
+    {
+      "slug": "reference/moss-training.html",
+      "title": "MOSS 训练验证",
+      "summary": "硬件验证边界。",
+      "order": 27,
+      "group": "moss-tts",
+      "objectives": [
+        "限定运行结论"
+      ],
+      "prerequisites": [
+        "910B 环境"
+      ],
+      "sections": [
+        {
+          "id": "training",
+          "title": "训练",
+          "blocks": [
+            {
+              "type": "paragraph",
+              "text": "观察：捕获精度、collective、loss 和保存重载。通过条件：最小 Ascend loop 完成并能重载 checkpoint。",
+              "state": "pending_hardware",
+              "evidence_ids": [
+                "REF-MOSS-TRAIN"
+              ]
+            },
+            {
+              "type": "source_refs",
+              "evidence_ids": [
+                "REF-MOSS-TRAIN"
+              ]
+            }
+          ]
+        }
+      ],
+      "track": "源码深读"
+    }
+  ]
+}

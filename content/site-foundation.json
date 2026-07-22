@@ -4,14 +4,16 @@
     {
       "slug": "index.html",
       "title": "Qwen3-TTS 官方目标源码学习路径",
-      "summary": "以固定源码快照和证据记录为边界，从 PyTorch 单卡基础逐步进入 Qwen3-TTS 包、模型、音频 tokenizer、训练契约与 SFT。",
+      "summary": "从迁移边界课进入官方目标源码，再用源码深读和实施路线组织静态证据与后续真机验证。",
       "order": 1,
       "group": "foundation",
       "objectives": [
-        "理解本知识站的静态源码阅读边界与分阶段学习顺序",
-        "区分项目原生环境与 CANN 8.5.2 待验证环境"
+        "理解三层学习路线的进入顺序与证据边界",
+        "区分静态源码阅读、跨项目对照和待真机验证的实施计划"
       ],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与训练循环"
+      ],
       "sections": [
         {
           "id": "public-scope",
@@ -21,27 +23,59 @@
               "type": "paragraph",
               "text": "本阶段只对固定的 Qwen3-TTS 官方公开源码进行静态阅读，并核对源码树中的 Apache License 2.0 文本；权重、数据与其他材料需要分别确认许可。本阶段没有运行 Qwen3-TTS 训练。这里不声称训练可运行，也不声称任何 CANN 版本兼容。",
               "state": "verified",
-              "evidence_ids": ["TGT-SCOPE-002", "TGT-PKG-003"]
+              "evidence_ids": [
+                "TGT-SCOPE-002",
+                "TGT-PKG-003"
+              ]
             },
             {
               "type": "source_refs",
-              "evidence_ids": ["TGT-SCOPE-002", "TGT-PKG-003"]
+              "evidence_ids": [
+                "TGT-SCOPE-002",
+                "TGT-PKG-003"
+              ]
             }
           ]
         },
         {
           "id": "learning-path",
-          "title": "从单卡基础到 SFT 的学习路径",
+          "title": "三层学习路线图",
           "blocks": [
+            {
+              "type": "paragraph",
+              "text": "第一层“入门教程”先用迁移边界课和官方目标页建立术语、输入输出与未知项；第二层“源码深读”再进入三份参考项目和五个迁移映射，逐条回到固定版本证据；第三层“实施路线”把环境到验收拆成待真机验证的阶段。三层不把静态阅读提升为硬件结论。",
+              "state": "inference",
+              "evidence_ids": [
+                "TGT-SCOPE-002",
+                "REF-MM-NPU"
+              ]
+            },
             {
               "type": "call_chain",
               "items": [
-                {"label": "PyTorch 单卡", "path": "基础张量与训练循环", "symbol": "tensor → loss → backward → step", "evidence_ids": []},
-                {"label": "包与 API", "path": "qwen_tts", "symbol": "公开入口与 from_pretrained", "evidence_ids": ["TGT-PKG-001", "TGT-API-001"]},
-                {"label": "模型", "path": "qwen_tts/core/models", "symbol": "Talker 与条件生成", "evidence_ids": ["TGT-MODEL-002", "TGT-MODEL-003"]},
-                {"label": "Tokenizers", "path": "qwen_tts/core/tokenizer_12hz 与 tokenizer_25hz", "symbol": "encode / decode", "evidence_ids": ["TGT-TOK12-001", "TGT-TOK25-001"]},
-                {"label": "契约", "path": "finetuning/dataset.py", "symbol": "数据、设备与导出边界", "evidence_ids": ["TGT-DATA-002", "TGT-EXPORT-001"]},
-                {"label": "SFT", "path": "finetuning/sft_12hz.py", "symbol": "loss → backward → optimizer", "evidence_ids": ["TGT-TRAIN-005"]}
+                {
+                  "label": "第一层：入门教程",
+                  "path": "guide/migration-boundary.html",
+                  "symbol": "迁移边界 → 官方目标源码",
+            "evidence_ids": [
+              "TGT-SCOPE-002",
+              "TGT-API-001"
+            ]
+                },
+                {
+                  "label": "第二层：源码深读",
+                  "path": "reference/* 与 mapping/*",
+                  "symbol": "固定证据 → 对照与映射",
+                  "evidence_ids": [
+                    "REF-MM-NPU"
+                  ]
+                },
+                {
+                  "label": "第三层：实施路线",
+                  "path": "guide/implementation-route.html",
+                  "symbol": "环境 → 单卡 → 单机多卡 → 多机 → 性能 → 验收",
+                  "evidence_ids": []
+                }
               ]
             }
           ]
@@ -54,19 +88,40 @@
               "type": "paragraph",
               "text": "项目原生学习车道固定为 PyTorch 2.7.1 + CANN 8.5.0；目标验证车道固定为 PyTorch 2.7.1 + CANN 8.5.2 unknown。CANN 8.5.2 兼容性：unknown，待真机验证。两条车道不能互相替代结论。",
               "state": "pending_hardware",
-              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+              "evidence_ids": [
+                "PH1-ENV-LANES",
+                "TGT-HW-001"
+              ]
             },
             {
               "type": "table",
-              "headers": ["车道", "软件组合", "用途", "结论状态"],
+              "headers": [
+                "车道",
+                "软件组合",
+                "用途",
+                "结论状态"
+              ],
               "rows": [
-                ["project-native", "2.7.1 + 8.5.0", "复现参考项目原生环境并学习源码", "项目记录"],
-                ["target", "2.7.1 + 8.5.2 unknown", "面向目标环境进行真机兼容性验证", "unknown / 待真机验证"]
+                [
+                  "project-native",
+                  "2.7.1 + 8.5.0",
+                  "复现参考项目原生环境并学习源码",
+                  "项目记录"
+                ],
+                [
+                  "target",
+                  "2.7.1 + 8.5.2 unknown",
+                  "面向目标环境进行真机兼容性验证",
+                  "unknown / 待真机验证"
+                ]
               ]
             },
             {
               "type": "source_refs",
-              "evidence_ids": ["PH1-ENV-LANES", "TGT-HW-001"]
+              "evidence_ids": [
+                "PH1-ENV-LANES",
+                "TGT-HW-001"
+              ]
             }
           ]
         },
@@ -82,27 +137,56 @@
             },
             {
               "type": "table",
-              "headers": ["序号", "延期工作包", "当前边界"],
+              "headers": [
+                "序号",
+                "延期工作包",
+                "当前边界"
+              ],
               "rows": [
-                ["1", "目标源码架构走读", "后续生成 target 架构页面"],
-                ["2", "MindSpeed-MM 训练栈映射", "后续建立主参考映射"],
-                ["3", "分布式与性能契约", "后续结合规模化卫星证据"],
-                ["4", "环境与兼容性验证", "后续在 CANN 8.5.2 真机执行"],
-                ["5", "单机到规模化 SFT 教程", "后续在契约与实验结果齐备后编写"]
+                [
+                  "1",
+                  "目标源码架构走读",
+                  "后续生成 target 架构页面"
+                ],
+                [
+                  "2",
+                  "MindSpeed-MM 训练栈映射",
+                  "后续建立主参考映射"
+                ],
+                [
+                  "3",
+                  "分布式与性能契约",
+                  "后续结合规模化卫星证据"
+                ],
+                [
+                  "4",
+                  "环境与兼容性验证",
+                  "后续在 CANN 8.5.2 真机执行"
+                ],
+                [
+                  "5",
+                  "单机到规模化 SFT 教程",
+                  "后续在契约与实验结果齐备后编写"
+                ]
               ]
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "indexes/source-files.html",
       "title": "四个固定快照文件索引",
       "summary": "按固定快照、文件类型与路径浏览四个批准源码树的文件元数据，并使用固定版本链接复核。",
-      "order": 11,
+      "order": 12,
       "group": "foundation",
-      "objectives": ["按快照、文件类型和路径定位固定源码文件"],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "objectives": [
+        "按快照、文件类型和路径定位固定源码文件"
+      ],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与训练循环"
+      ],
       "sections": [
         {
           "id": "snapshot-provenance",
@@ -110,12 +194,37 @@
           "blocks": [
             {
               "type": "table",
-              "headers": ["快照", "角色", "获取方式", "含义"],
+              "headers": [
+                "快照",
+                "角色",
+                "获取方式",
+                "含义"
+              ],
               "rows": [
-                ["qwen3-tts-022e286b", "official-target", "Git sparse checkout", "固定 Git tree 的源码子集"],
-                ["MindSpeed-MM (mindspeed-mm-0edd553e)", "main-reference", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
-                ["MindSpeed-LLM (mindspeed-llm-434baff7)", "scale-satellite", "codeload archive", "固定 SHA 的下载归档，无 Git 元数据"],
-                ["moss-tts-ad99ec5f", "speech-codec-satellite", "Git sparse checkout", "固定 Git tree 的源码子集"]
+                [
+                  "qwen3-tts-022e286b",
+                  "official-target",
+                  "Git sparse checkout",
+                  "固定 Git tree 的源码子集"
+                ],
+                [
+                  "MindSpeed-MM (mindspeed-mm-0edd553e)",
+                  "main-reference",
+                  "codeload archive",
+                  "固定 SHA 的下载归档，无 Git 元数据"
+                ],
+                [
+                  "MindSpeed-LLM (mindspeed-llm-434baff7)",
+                  "scale-satellite",
+                  "codeload archive",
+                  "固定 SHA 的下载归档，无 Git 元数据"
+                ],
+                [
+                  "moss-tts-ad99ec5f",
+                  "speech-codec-satellite",
+                  "Git sparse checkout",
+                  "固定 Git tree 的源码子集"
+                ]
               ]
             }
           ]
@@ -130,7 +239,10 @@
               "state": "verified",
               "evidence_ids": []
             },
-            {"type": "index_table", "dataset": "files"}
+            {
+              "type": "index_table",
+              "dataset": "files"
+            }
           ]
         },
         {
@@ -145,16 +257,21 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "indexes/symbols-configs.html",
       "title": "符号与配置项索引",
       "summary": "浏览四个固定快照中由 AST 与静态键提取器生成的符号和配置元数据，不暴露配置值。",
-      "order": 12,
+      "order": 13,
       "group": "foundation",
-      "objectives": ["按限定名、配置键、文件和行号定位静态索引记录"],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "objectives": [
+        "按限定名、配置键、文件和行号定位静态索引记录"
+      ],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与训练循环"
+      ],
       "sections": [
         {
           "id": "symbol-index",
@@ -166,7 +283,10 @@
               "state": "verified",
               "evidence_ids": []
             },
-            {"type": "index_table", "dataset": "symbols"}
+            {
+              "type": "index_table",
+              "dataset": "symbols"
+            }
           ]
         },
         {
@@ -179,7 +299,10 @@
               "state": "verified",
               "evidence_ids": []
             },
-            {"type": "index_table", "dataset": "configs"}
+            {
+              "type": "index_table",
+              "dataset": "configs"
+            }
           ]
         },
         {
@@ -194,16 +317,21 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     },
     {
       "slug": "search.html",
       "title": "全站搜索",
       "summary": "离线搜索页面标题、摘要、章节标题以及固定快照的文件、符号和配置元数据。",
-      "order": 13,
+      "order": 14,
       "group": "foundation",
-      "objectives": ["在不请求远程资源的情况下检索站点与源码索引元数据"],
-      "prerequisites": ["熟悉 PyTorch 单卡张量与训练循环"],
+      "objectives": [
+        "在不请求远程资源的情况下检索站点与源码索引元数据"
+      ],
+      "prerequisites": [
+        "熟悉 PyTorch 单卡张量与训练循环"
+      ],
       "sections": [
         {
           "id": "search-results",
@@ -241,7 +369,8 @@
             }
           ]
         }
-      ]
+      ],
+      "track": "入门教程"
     }
   ]
 }
