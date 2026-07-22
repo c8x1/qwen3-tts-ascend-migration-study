@@ -1177,6 +1177,12 @@ class SiteBuilderTest(unittest.TestCase):
             errors,
         )
 
+    def test_catalog_validator_accepts_guide_slug(self):
+        data = minimal_catalog()
+        data["pages"][0]["slug"] = "guide/migration-boundary.html"
+
+        self.assertEqual(validate_catalogs(data, {"E-1"}), [])
+
     def test_render_groups_navigation_and_marks_page_learning_track(self):
         pages = minimal_catalog()["pages"]
         for order, track in enumerate(("入门教程", "源码深读", "实施路线"), 1):

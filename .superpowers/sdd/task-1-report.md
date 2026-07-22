@@ -50,3 +50,31 @@ The full Playwright run passed 50 tests and failed the 3 approved visual-baselin
 
 - Existing catalogs deliberately omit `track` until Task 2. The builder treats those 31 pages as `源码深读`, while the schema validates any supplied `track` against the three allowed labels.
 - No `content/learning-route-pilot.json` was created and no substantive tutorial catalog text was changed.
+
+---
+
+## Task 1 review follow-up: guide slug contract
+
+### Scope
+
+- Added the `guide/<slug>.html` alternative to the catalog slug schema only.
+- Added one catalog-validation regression for `guide/migration-boundary.html`.
+- Did not change catalog content pages or generated site output.
+
+### TDD evidence
+
+**RED**
+
+```sh
+python3 -m unittest tests.test_site_builder.SiteBuilderTest.test_catalog_validator_accepts_guide_slug
+```
+
+Failed as expected because `guide/migration-boundary.html` did not match the page-catalog slug pattern.
+
+**GREEN**
+
+```sh
+python3 -m unittest -v tests.test_site_builder.SiteBuilderTest.test_catalog_validator_accepts_guide_slug tests.test_site_builder.SiteBuilderTest.test_catalog_validator_rejects_unknown_evidence_and_block_field tests.test_site_builder.SiteBuilderTest.test_catalog_track_accepts_only_learning_route_tracks tests.test_site_builder.SiteBuilderTest.test_catalog_validator_is_total_for_malformed_containers_and_union
+```
+
+Result: 4 tests passed.
