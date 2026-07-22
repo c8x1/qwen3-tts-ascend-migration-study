@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from scripts import phase2_contracts as contracts
+from scripts import site_builder
 from scripts.phase2_contracts import (
     DECISION_REFS,
     Snapshot,
@@ -45,7 +46,7 @@ def full_inputs():
         ROOT / "content/target-training.json",
     ]
     pages = load_page_catalogs(catalogs)
-    evidence = load_evidence(ROOT / "research/target-evidence.json")
+    evidence = site_builder.load_all_evidence()
     with (ROOT / "research/target-coverage.csv").open(
         encoding="utf-8", newline=""
     ) as handle:
@@ -1217,6 +1218,12 @@ class TargetCoverageTest(unittest.TestCase):
 
 
 class GeneratedSiteContractTest(unittest.TestCase):
+    def test_full_committed_catalog_can_reference_reference_evidence(self):
+        _, pages, evidence, coverage = full_inputs()
+
+        self.assertIn("REF-MM-NPU", evidence)
+        self.assertEqual(validate_cross_contracts(pages, evidence, coverage), [])
+
     def test_committed_catalog_coverage_and_evidence_bridge_is_complete(self):
         _, pages, evidence, coverage = full_inputs()
         self.assertEqual(validate_cross_contracts(pages, evidence, coverage), [])
