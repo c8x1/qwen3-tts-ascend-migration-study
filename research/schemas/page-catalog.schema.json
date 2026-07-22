@@ -14,7 +14,7 @@
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "slug", "title", "summary", "order", "group", "objectives",
+          "slug", "title", "summary", "order", "group", "track", "objectives",
           "prerequisites", "sections"
         ],
         "properties": {

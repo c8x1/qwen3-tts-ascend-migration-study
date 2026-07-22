@@ -31,7 +31,6 @@ STATE_LABELS = {
 }
 
 NAVIGATION_TRACKS = ("入门教程", "源码深读", "实施路线")
-DEFAULT_TRACK = "源码深读"
 
 
 @lru_cache(maxsize=1)
@@ -549,7 +548,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
             f"{_escape(track)}</h2></li>"
         )
         for item in ordered:
-            if item.get("track", DEFAULT_TRACK) != track:
+            if item["track"] != track:
                 continue
             current = item["slug"] == page_slug
             attrs = ' class="active" aria-current="page"' if current else ""
@@ -719,7 +718,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
     <main id="article-content">
       <article>
         <p class="breadcrumb">{_escape(page['group'])} / {_escape(page['order'])}</p>
-        <p class="lesson-wayfinding">学习轨道：{_escape(page.get('track', DEFAULT_TRACK))}</p>
+        <p class="lesson-wayfinding">学习轨道：{_escape(page['track'])}</p>
         <h1>{_escape(page['title'])}</h1>
         <p class="lead">{_escape(page['summary'])}</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul>{objectives}</ul></div><div><h2>前置知识</h2><ul>{prerequisites}</ul></div></div>

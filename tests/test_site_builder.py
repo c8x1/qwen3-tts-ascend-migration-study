@@ -1177,6 +1177,15 @@ class SiteBuilderTest(unittest.TestCase):
             errors,
         )
 
+    def test_catalog_validator_rejects_page_without_track(self):
+        data = minimal_catalog()
+        del data["pages"][0]["track"]
+
+        self.assertIn(
+            "catalog.pages[0]: missing field track",
+            validate_catalogs(data, {"E-1"}),
+        )
+
     def test_catalog_validator_accepts_guide_slug(self):
         data = minimal_catalog()
         data["pages"][0]["slug"] = "guide/migration-boundary.html"
