@@ -30,6 +30,9 @@ STATE_LABELS = {
     "pending_hardware": "待真机验证",
 }
 
+NAVIGATION_TRACKS = ("入门教程", "源码深读", "实施路线")
+DEFAULT_TRACK = "源码深读"
+
 
 @lru_cache(maxsize=1)
 def load_page_catalog_schema() -> dict[str, object]:
@@ -540,14 +543,21 @@ def render_page(page, navigation, evidence, search_documents) -> str:
 
     ordered = tuple(sorted(navigation, key=lambda row: row["order"]))
     nav_items = []
-    for item in ordered:
-        current = item["slug"] == page_slug
-        attrs = ' class="active" aria-current="page"' if current else ""
+    for track in NAVIGATION_TRACKS:
         nav_items.append(
-            f'<li><a data-page-link{attrs} '
-            f'href="{_escape(relative_href(page_slug, item["slug"]))}">'
-            f"{_escape(item['order'])} · {_escape(item['title'])}</a></li>"
+            f'<li class="chapter-group"><h2 class="chapter-group-label">'
+            f"{_escape(track)}</h2></li>"
         )
+        for item in ordered:
+            if item.get("track", DEFAULT_TRACK) != track:
+                continue
+            current = item["slug"] == page_slug
+            attrs = ' class="active" aria-current="page"' if current else ""
+            nav_items.append(
+                f'<li><a data-page-link{attrs} '
+                f'href="{_escape(relative_href(page_slug, item["slug"]))}">'
+                f"{_escape(item['order'])} · {_escape(item['title'])}</a></li>"
+            )
 
     objectives = "".join(
         f"<li>{_escape(item)}</li>" for item in page["objectives"]
@@ -702,6 +712,7 @@ def render_page(page, navigation, evidence, search_documents) -> str:
     <main id="article-content">
       <article>
         <p class="breadcrumb">{_escape(page['group'])} / {_escape(page['order'])}</p>
+        <p class="lesson-wayfinding">学习轨道：{_escape(page.get('track', DEFAULT_TRACK))}</p>
         <h1>{_escape(page['title'])}</h1>
         <p class="lead">{_escape(page['summary'])}</p>
         <div class="learning-contract"><div><h2>学习目标</h2><ul>{objectives}</ul></div><div><h2>前置知识</h2><ul>{prerequisites}</ul></div></div>

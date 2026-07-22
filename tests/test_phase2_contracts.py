@@ -1403,6 +1403,16 @@ class GeneratedSiteContractTest(unittest.TestCase):
             validate_fixed_links(root, registry),
         )
 
+    def test_fixed_link_validation_uses_generated_catalog_page_count(self):
+        context, root, pages, _, _ = generated_copy()
+        self.addCleanup(context.cleanup)
+        registry = load_snapshot_registry(ROOT / "research/source-snapshots.json")
+        errors = validate_fixed_links(root, registry, pages=pages[:-1])
+        self.assertIn(
+            f"fixed links: expected {len(pages) - 1} HTML pages, found {len(pages)}",
+            errors,
+        )
+
     def test_public_tracking_rejects_restricted_path_and_lfs_pointer_but_allows_normal_files(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

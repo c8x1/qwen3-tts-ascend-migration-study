@@ -351,6 +351,7 @@ def minimal_catalog(block=None, text="x"):
                 "summary": "Summary",
                 "order": 1,
                 "group": "foundation",
+                "track": "源码深读",
                 "objectives": ["Learn"],
                 "prerequisites": ["PyTorch"],
                 "sections": [
@@ -1166,6 +1167,37 @@ class SiteBuilderTest(unittest.TestCase):
         self.assertIn(
             "catalog.pages[0]#intro: unknown evidence MISSING", errors
         )
+
+    def test_catalog_track_accepts_only_learning_route_tracks(self):
+        data = minimal_catalog()
+        data["pages"][0]["track"] = "未知轨道"
+        errors = validate_catalogs(data, {"E-1"})
+        self.assertIn(
+            "catalog.pages[0].track: expected one of ['入门教程', '源码深读', '实施路线']",
+            errors,
+        )
+
+    def test_render_groups_navigation_and_marks_page_learning_track(self):
+        pages = minimal_catalog()["pages"]
+        for order, track in enumerate(("入门教程", "源码深读", "实施路线"), 1):
+            page = copy.deepcopy(pages[0])
+            page.update({
+                "slug": "index.html" if order == 1 else f"guide/route-{order}.html",
+                "title": track,
+                "order": order,
+                "track": track,
+            })
+            if order == 1:
+                pages[0] = page
+            else:
+                pages.append(page)
+        html = render_page(pages[1], pages, fixture_evidence(), [])
+        self.assertEqual(
+            re.findall(r'<h2 class="chapter-group-label">([^<]+)</h2>', html),
+            ["入门教程", "源码深读", "实施路线"],
+        )
+        self.assertEqual(html.count("data-page-link"), 3)
+        self.assertIn('class="lesson-wayfinding">学习轨道：源码深读</p>', html)
 
     def test_catalog_validator_is_total_for_malformed_containers_and_union(self):
         malformed = [

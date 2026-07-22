@@ -1393,15 +1393,17 @@ def _expected_fixed_url(
     )
 
 
-def validate_fixed_links(site_root: Path, registry) -> list[str]:
+def validate_fixed_links(site_root: Path, registry, *, pages=None) -> list[str]:
     from scripts.site_builder import load_all_indexes
 
     errors: list[str] = []
     indexes = load_all_indexes()
     html_paths = sorted(site_root.rglob("*.html"))
-    if len(html_paths) != 13:
+    expected_html_count = len(pages) if pages is not None else 13
+    if len(html_paths) != expected_html_count:
         errors.append(
-            f"fixed links: expected 13 HTML pages, found {len(html_paths)}"
+            "fixed links: expected "
+            f"{expected_html_count} HTML pages, found {len(html_paths)}"
         )
     repository_blob_prefixes = tuple(
         snapshot.blob_url_template.partition("/blob/")[0] + "/blob/"

@@ -15,6 +15,8 @@ if str(ROOT) not in sys.path:
 from scripts.build_site import default_catalogs
 from scripts.phase2_contracts import (
     load_evidence,
+    load_snapshot_registry,
+    validate_fixed_links,
     validate_public_tracking,
     validate_generated_site,
     validate_target_coverage,
@@ -39,6 +41,11 @@ def main() -> int:
         errors.extend(validate_target_coverage(indexes["qwen3-tts-022e286b"], ROOT / "research/target-coverage.csv", target_evidence))
         pages = load_page_catalogs(default_catalogs())
         build_site(ROOT / "site", default_catalogs())
+        errors.extend(validate_fixed_links(
+            ROOT / "site", load_snapshot_registry(
+                ROOT / "research/source-snapshots.json"
+            ), pages=pages,
+        ))
         errors.extend(validate_generated_site(
             ROOT / "site", pages, {**target_evidence, **reference_evidence},
             target_rows, catalog_paths=default_catalogs(),

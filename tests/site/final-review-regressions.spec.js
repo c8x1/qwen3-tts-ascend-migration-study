@@ -126,6 +126,9 @@ test('copy failure leaves a clear manual-copy fallback', async ({ page }) => {
 test('chapter tree exposes the complete ordered path and current page', async ({ page }) => {
   await page.goto('/site/');
   const links = page.locator('#chapter-tree a[data-page-link]');
+  await expect(page.locator('.chapter-group-label')).toHaveText([
+    '入门教程', '源码深读', '实施路线',
+  ]);
   await expect(links).toHaveCount(31);
   await expect(links.first()).toHaveAttribute('aria-current', 'page');
   await expect(links.first()).toContainText('Qwen3-TTS');

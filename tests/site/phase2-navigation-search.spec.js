@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 
 test('all Phase 3 pages are reachable through chapter navigation', async ({ page }) => {
   await page.goto('/site/');
+  await expect(page.locator('.chapter-group-label')).toHaveText([
+    '入门教程', '源码深读', '实施路线',
+  ]);
   await expect(page.locator('#chapter-tree a[data-page-link]')).toHaveCount(31);
 });
 
